@@ -476,12 +476,77 @@
     height: 1px;
     background: var(--border);
   }
+
+  body.light {
+    --bg: #f4f6f9;
+    --bg2: #ffffff;
+    --bg3: #e8ecf2;
+    --border: #d0d9e8;
+    --border2: #b8c5d9;
+    --text: #1a2333;
+    --text2: #4a5d78;
+    --text3: #8a9db5;
+    --green: #00a854;
+    --green-dim: #007a3d;
+    --green-bg: rgba(0,168,84,0.08);
+    --red: #d93025;
+    --red-dim: #b02218;
+    --red-bg: rgba(217,48,37,0.08);
+    --yellow: #c17f00;
+    --yellow-bg: rgba(193,127,0,0.08);
+    --blue: #1a73e8;
+    --blue-bg: rgba(26,115,232,0.08);
+  }
+
+  body.light::before { display: none; }
+
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .toggle-icon { font-size: 14px; line-height: 1; user-select: none; }
+
+  .toggle-track {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: var(--border2);
+    border-radius: 10px;
+    transition: background 0.25s;
+    flex-shrink: 0;
+  }
+
+  .toggle-track.on { background: var(--accent); }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .toggle-track.on .toggle-thumb { transform: translateX(16px); }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="logo">MKT<span>WATCH</span></div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="logo">MKT<span>WATCH</span></div>
+    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+      <span class="toggle-icon">☀️</span>
+      <div class="toggle-track" id="toggle-track">
+        <div class="toggle-thumb"></div>
+      </div>
+      <span class="toggle-icon">🌙</span>
+    </div>
+  </div>
   <div class="header-clock">
     <div id="local-time">--:--:--</div>
     <div id="local-date">--- --- --</div>
@@ -987,6 +1052,17 @@ setInterval(() => {
 
 // Full data refresh every 30s
 setInterval(fullUpdate, 30000);
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle("light");
+  document.getElementById("toggle-track").classList.toggle("on", isLight);
+  localStorage.setItem("theme", isLight ? "light" : "dark");
+}
+
+if (localStorage.getItem("theme") === "light") {
+  document.body.classList.add("light");
+  document.getElementById("toggle-track").classList.add("on");
+}
 </script>
 </body>
 </html>
