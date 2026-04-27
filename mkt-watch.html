@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MKTWATCH — Market Hours</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --bg2: #0f1217;
+    --bg3: #151a22;
+    --border: #1e2530;
+    --border2: #252e3d;
+    --text: #dde6f0;
+    --text2: #8a9db5;
+    --text3: #566a80;
+    --green: #00e676;
+    --green-dim: #00b35a;
+    --green-bg: rgba(0,230,118,0.06);
+    --red: #ff4444;
+    --red-dim: #cc2222;
+    --red-bg: rgba(255,68,68,0.06);
+    --yellow: #ffd740;
+    --yellow-bg: rgba(255,215,64,0.06);
+    --blue: #4db8ff;
+    --blue-bg: rgba(77,184,255,0.06);
+    --accent: #2563eb;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scan line effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  .logo {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: var(--text2);
+  }
+
+  .logo span {
+    color: var(--blue);
+  }
+
+  .header-clock {
+    text-align: right;
+  }
+
+  #local-time {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.05em;
+  }
+
+  #local-date {
+    font-size: 10px;
+    color: var(--text2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  #local-tz {
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+  }
+
+  .main {
+    padding: 20px 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* Session overlap bar */
+  .session-bar-wrap {
+    margin-bottom: 20px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    color: var(--text2);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .session-timeline {
+    position: relative;
+    height: 28px;
+    background: var(--bg);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .session-block {
+    position: absolute;
+    height: 100%;
+    border-radius: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    opacity: 0.85;
+    transition: opacity 0.3s;
+  }
+
+  .session-block.active { opacity: 1; }
+  .session-block.inactive { opacity: 0.3; }
+
+  .session-block.asia { background: rgba(77,184,255,0.25); color: var(--blue); border: 1px solid rgba(77,184,255,0.3); }
+  .session-block.europe { background: rgba(255,215,64,0.2); color: var(--yellow); border: 1px solid rgba(255,215,64,0.25); }
+  .session-block.us { background: rgba(0,230,118,0.2); color: var(--green); border: 1px solid rgba(0,230,118,0.25); }
+  .session-block.overlap { background: rgba(255,100,50,0.35); color: #ff9060; border: 1px solid rgba(255,100,50,0.4); }
+
+  .time-ruler {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .time-ruler-tick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .time-ruler-utc {
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.05em;
+  }
+
+  .time-ruler-local {
+    font-size: 10px;
+    color: var(--text);
+    letter-spacing: 0.05em;
+  }
+
+  .current-time-needle {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: rgba(255,255,255,0.7);
+    z-index: 10;
+  }
+
+  /* Market grid */
+  .markets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .market-card {
+    background: var(--bg2);
+    padding: 14px 16px;
+    cursor: default;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .market-card:hover {
+    background: var(--bg3);
+  }
+
+  .market-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+  }
+
+  .market-card.open::before { background: var(--green); }
+  .market-card.closed::before { background: var(--text3); }
+  .market-card.pre::before { background: var(--yellow); }
+  .market-card.lunch::before { background: var(--blue); }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .market-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .market-ticker {
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  .status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    padding: 2px 7px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .status-badge.open { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,230,118,0.2); }
+  .status-badge.closed { background: rgba(255,255,255,0.03); color: var(--text3); border: 1px solid var(--border); }
+  .status-badge.pre { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(255,215,64,0.2); }
+  .status-badge.lunch { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(77,184,255,0.2); }
+
+  .card-times {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+
+  .time-block { flex: 1; }
+
+  .time-label {
+    font-size: 10px;
+    color: var(--text2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+
+  .time-val {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text2);
+  }
+
+  .time-val.highlight { color: var(--text); }
+
+  .card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .next-event {
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .next-event span { color: var(--text); }
+
+  .delta {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .delta.pos { color: var(--green); }
+  .delta.neg { color: var(--red); }
+  .delta.neu { color: var(--text3); }
+
+  .delta-arrow { font-size: 10px; }
+
+  /* Progress bar for open time */
+  .session-progress {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+
+  .session-progress-fill {
+    height: 100%;
+    border-radius: 1px;
+    background: var(--green-dim);
+    transition: width 1s linear;
+  }
+
+  .market-card.closed .session-progress-fill {
+    background: var(--text3);
+    width: 0% !important;
+  }
+
+  /* Forex section */
+  .forex-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .forex-cell {
+    background: var(--bg2);
+    padding: 12px 14px;
+    transition: background 0.15s;
+  }
+
+  .forex-cell:hover { background: var(--bg3); }
+
+  .fx-pair {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .fx-price {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fx-delta {
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  .fx-delta.pos { color: var(--green); }
+  .fx-delta.neg { color: var(--red); }
+
+  /* Countdown timer */
+  .countdown-strip {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .countdown-item {
+    flex: 1;
+    background: var(--bg2);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .countdown-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .countdown-dot.open { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .countdown-dot.closed { background: var(--text3); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .countdown-label {
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .countdown-val {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+  }
+
+  .countdown-val.urgent { color: var(--yellow); }
+
+  /* Footer */
+  .footer {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.1em;
+  }
+
+  .live-dot {
+    display: inline-block;
+    width: 5px; height: 5px;
+    background: var(--green);
+    border-radius: 50%;
+    margin-right: 5px;
+    animation: pulse 2s infinite;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .section-header .section-label { margin-bottom: 0; }
+
+  .section-divider {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">MKT<span>WATCH</span></div>
+  <div class="header-clock">
+    <div id="local-time">--:--:--</div>
+    <div id="local-date">--- --- --</div>
+    <div id="local-tz">UTC+0</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Session Bar -->
+  <div class="session-bar-wrap">
+    <div class="section-label">24H SESSION OVERVIEW — UTC / LOCAL</div>
+    <div class="session-timeline" id="session-timeline">
+      <div class="current-time-needle" id="time-needle"></div>
+    </div>
+    <div class="time-ruler" id="time-ruler"></div>
+  </div>
+
+  <!-- Key Countdowns -->
+  <div class="section-header">
+    <div class="section-label">NEXT OPEN / CLOSE</div>
+    <div class="section-divider"></div>
+  </div>
+  <div class="countdown-strip" id="countdown-strip"></div>
+
+  <!-- Main Markets -->
+  <div class="section-header">
+    <div class="section-label">EQUITY MARKETS</div>
+    <div class="section-divider"></div>
+  </div>
+  <div class="markets-grid" id="markets-grid"></div>
+
+
+
+</div>
+
+<div class="footer">
+  <div><span class="live-dot"></span>LIVE — REFRESHES EVERY 30S</div>
+  <div id="last-update">LAST UPDATE: --:--:--</div>
+  <div>TIMES IN YOUR LOCAL TIMEZONE</div>
+</div>
+
+<script>
+// ─── Market definitions ───────────────────────────────────────────────────────
+const MARKETS = [
+  {
+    id: 'nasdaq', name: 'NASDAQ', ticker: 'NDX / QQQ',
+    tz: 'America/New_York',
+    open: [9,30], close: [16,0],
+    pre: [4,0], afterhours: [20,0],
+    session: 'US',
+    index: '^NDX'
+  },
+  {
+    id: 'nyse', name: 'NYSE', ticker: 'S&P 500 / SPY',
+    tz: 'America/New_York',
+    open: [9,30], close: [16,0],
+    session: 'US',
+    index: '^GSPC'
+  },
+  {
+    id: 'cme', name: 'CME Futures', ticker: 'ES / NQ / RTY',
+    tz: 'America/Chicago',
+    open: [17,0], close: [16,0],
+    note: '23h/day Sun–Fri',
+    alwaysOn: true,
+    session: 'US'
+  },
+  {
+    id: 'lse', name: 'London Stock Exchange', ticker: 'FTSE 100',
+    tz: 'Europe/London',
+    open: [8,0], close: [16,30],
+    session: 'EU'
+  },
+  {
+    id: 'xetra', name: 'Frankfurt / XETRA', ticker: 'DAX',
+    tz: 'Europe/Berlin',
+    open: [9,0], close: [17,30],
+    session: 'EU'
+  },
+  {
+    id: 'tse', name: 'Tokyo Stock Exchange', ticker: 'Nikkei 225',
+    tz: 'Asia/Tokyo',
+    open: [9,0], close: [15,30],
+    lunch: [11,30], lunchEnd: [12,30],
+    session: 'ASIA'
+  },
+  {
+    id: 'hkex', name: 'Hong Kong Exchange', ticker: 'Hang Seng',
+    tz: 'Asia/Hong_Kong',
+    open: [9,30], close: [16,0],
+    lunch: [12,0], lunchEnd: [13,0],
+    session: 'ASIA'
+  },
+  {
+    id: 'sse', name: 'Shanghai / Shenzhen', ticker: 'CSI 300',
+    tz: 'Asia/Shanghai',
+    open: [9,30], close: [15,0],
+    lunch: [11,30], lunchEnd: [13,0],
+    session: 'ASIA'
+  },
+  {
+    id: 'asx', name: 'ASX', ticker: 'ASX 200',
+    tz: 'Australia/Sydney',
+    open: [10,0], close: [16,0],
+    session: 'ASIA'
+  },
+  {
+    id: 'eurex', name: 'Eurex Futures', ticker: 'FDAX / FESX / BUND',
+    tz: 'Europe/Berlin',
+    open: [8,0], close: [22,0],
+    session: 'EU'
+  },
+  {
+    id: 'sgx', name: 'Singapore Exchange', ticker: 'SGX / STI',
+    tz: 'Asia/Singapore',
+    open: [9,0], close: [17,0],
+    lunch: [12,0], lunchEnd: [13,0],
+    session: 'ASIA'
+  },
+  {
+    id: 'crypto', name: 'Crypto (BTC/ETH)', ticker: 'BTC · ETH · SOL',
+    tz: 'UTC',
+    open: [0,0], close: [23,59],
+    alwaysOn: true,
+    session: 'CRYPTO'
+  }
+];
+
+// UTC hours [start, end] for session timeline blocks
+const SESSIONS = [
+  { label: 'ASIA', start: 0, end: 9, cls: 'asia' },
+  { label: 'EU', start: 7, end: 16.5, cls: 'europe' },
+  { label: 'US', start: 13.5, end: 20.5, cls: 'us' },
+  { label: 'EU+US OVERLAP', start: 13.5, end: 16.5, cls: 'overlap' },
+];
+
+const FX_PAIRS = [
+  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD',
+  'USD/CHF', 'USD/CAD', 'NZD/USD', 'DXY'
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getLocalTimeInTZ(tz) {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit',
+    second: '2-digit', hour12: false,
+    weekday: 'short'
+  }).formatToParts(now);
+  const get = t => parts.find(p => p.type === t)?.value;
+  return {
+    h: parseInt(get('hour')),
+    m: parseInt(get('minute')),
+    s: parseInt(get('second')),
+    day: get('weekday') // Mon–Sun
+  };
+}
+
+function isWeekend(tz) {
+  const { day } = getLocalTimeInTZ(tz);
+  return day === 'Sat' || day === 'Sun';
+}
+
+function getMarketStatus(m) {
+  if (m.alwaysOn) {
+    if (m.id === 'cme' && isWeekend('America/Chicago')) {
+      // CME closed Fri 5pm – Sun 6pm CT roughly
+      const t = getLocalTimeInTZ('America/Chicago');
+      const mins = t.h * 60 + t.m;
+      if (t.day === 'Sat') return 'closed';
+      if (t.day === 'Sun' && mins < 18 * 60) return 'closed';
+    }
+    return 'open';
+  }
+  if (isWeekend(m.tz)) return 'closed';
+
+  const t = getLocalTimeInTZ(m.tz);
+  const mins = t.h * 60 + t.m;
+  const openMins  = m.open[0]  * 60 + m.open[1];
+  const closeMins = m.close[0] * 60 + m.close[1];
+
+  if (m.lunch) {
+    const lunchMins    = m.lunch[0]    * 60 + m.lunch[1];
+    const lunchEndMins = m.lunchEnd[0] * 60 + m.lunchEnd[1];
+    if (mins >= lunchMins && mins < lunchEndMins) return 'lunch';
+  }
+
+  if (m.pre && !m.alwaysOn) {
+    const preMins = m.pre[0] * 60 + m.pre[1];
+    if (mins >= preMins && mins < openMins) return 'pre';
+  }
+
+  if (mins >= openMins && mins < closeMins) return 'open';
+  return 'closed';
+}
+
+function fmtTime(h, m) {
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+function toLocalTime(tz, h, m) {
+  // Convert market open/close times to user local time
+  const now = new Date();
+  // Build a date string for today in that tz at the given h:m
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+  const y = parts.find(p=>p.type==='year').value;
+  const mo = parts.find(p=>p.type==='month').value;
+  const d = parts.find(p=>p.type==='day').value;
+  const dt = new Date(`${y}-${mo}-${d}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
+  // dt is now in local time assumed — we need to create in TZ
+  // Use a different approach: find offset
+  const tzStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, timeZoneName: 'shortOffset'
+  }).format(now);
+  const offsetMatch = tzStr.match(/GMT([+-]\d+(?::\d+)?)/);
+  let offsetHours = 0;
+  if (offsetMatch) {
+    const offParts = offsetMatch[1].split(':');
+    offsetHours = parseInt(offParts[0]) + (offParts[1] ? parseInt(offParts[1]) / 60 * Math.sign(parseInt(offParts[0])) : 0);
+  }
+  // local offset
+  const localOffset = -now.getTimezoneOffset() / 60;
+  const diffH = localOffset - offsetHours;
+  let lh = h + diffH;
+  if (lh >= 24) lh -= 24;
+  if (lh < 0) lh += 24;
+  return fmtTime(Math.floor(lh), m + (diffH % 1 !== 0 ? 30 : 0));
+}
+
+// Accurate conversion using Intl
+function mktTimeToLocal(tz, h, m) {
+  const now = new Date();
+  // Get today's date in the market TZ
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+  const yr = dateParts.find(p=>p.type==='year').value;
+  const mo = dateParts.find(p=>p.type==='month').value;
+  const dy = dateParts.find(p=>p.type==='day').value;
+
+  // Create UTC Date as if this h:m is in the market TZ
+  const mktDate = new Date(`${yr}-${mo}-${dy}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
+
+  // Find UTC offset of market TZ at this date
+  const tzOffset = (() => {
+    const utcDate = new Date(mktDate.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzDate  = new Date(mktDate.toLocaleString('en-US', { timeZone: tz }));
+    return (tzDate - utcDate) / 36e5; // hours
+  })();
+
+  const utcH = h - tzOffset;
+  const utcDate = new Date(Date.UTC(parseInt(yr), parseInt(mo)-1, parseInt(dy), utcH, m));
+
+  // Format in user's local timezone
+  const localParts = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(utcDate);
+  const lh = localParts.find(p=>p.type==='hour').value;
+  const lm = localParts.find(p=>p.type==='minute').value;
+  return `${lh}:${lm}`;
+}
+
+function timeUntil(tz, h, m) {
+  const now = new Date();
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+  const yr = dateParts.find(p=>p.type==='year').value;
+  const mo = dateParts.find(p=>p.type==='month').value;
+  const dy = dateParts.find(p=>p.type==='day').value;
+
+  const tzOffset = (() => {
+    const utcDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzDate  = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+    return (tzDate - utcDate) / 36e5;
+  })();
+
+  const utcH = h - tzOffset;
+  let target = new Date(Date.UTC(parseInt(yr), parseInt(mo)-1, parseInt(dy), utcH, m));
+  if (target < now) target = new Date(target.getTime() + 86400000);
+  const diff = target - now;
+  const hh = Math.floor(diff / 3600000);
+  const mm = Math.floor((diff % 3600000) / 60000);
+  const ss = Math.floor((diff % 60000) / 1000);
+  return { h: hh, m: mm, s: ss, ms: diff };
+}
+
+function sessionProgress(tz, openH, openM, closeH, closeM) {
+  const t = getLocalTimeInTZ(tz);
+  const cur = t.h * 60 + t.m;
+  const o   = openH * 60 + openM;
+  const c   = closeH * 60 + closeM;
+  if (cur < o || cur > c) return 0;
+  return Math.min(100, ((cur - o) / (c - o)) * 100);
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+
+function renderTimeRuler() {
+  const ruler = document.getElementById('time-ruler');
+  const UTC_HOURS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+  ruler.innerHTML = UTC_HOURS.map(utcH => {
+    const utcLabel = `${String(utcH % 24).padStart(2,'0')}:00`;
+    // Convert UTC hour to local time
+    const d = new Date();
+    const localDate = new Date(Date.UTC(
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      utcH % 24, 0, 0
+    ));
+    const localLabel = new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(localDate);
+    return `<div class="time-ruler-tick">
+      <span class="time-ruler-utc">${utcLabel}</span>
+      <span class="time-ruler-local">${localLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSessionBar() {
+  renderTimeRuler();
+  const timeline = document.getElementById('session-timeline');
+  // Clear old blocks but keep needle
+  [...timeline.querySelectorAll('.session-block')].forEach(el => el.remove());
+
+  const now = new Date();
+  const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
+  const needle = document.getElementById('time-needle');
+  needle.style.left = `${(utcH / 24) * 100}%`;
+
+  SESSIONS.forEach(s => {
+    const div = document.createElement('div');
+    div.className = `session-block ${s.cls}`;
+    div.style.left   = `${(s.start / 24) * 100}%`;
+    div.style.width  = `${((s.end - s.start) / 24) * 100}%`;
+
+    // Is this session currently active?
+    const active = utcH >= s.start && utcH < s.end;
+    div.classList.add(active ? 'active' : 'inactive');
+    if (s.end - s.start > 2) div.textContent = s.label;
+    timeline.insertBefore(div, needle);
+  });
+}
+
+function renderMarkets() {
+  const grid = document.getElementById('markets-grid');
+  grid.innerHTML = '';
+
+  MARKETS.forEach(m => {
+    const status = getMarketStatus(m);
+    const openLocal  = mktTimeToLocal(m.tz, m.open[0],  m.open[1]);
+    const closeLocal = mktTimeToLocal(m.tz, m.close[0], m.close[1]);
+
+    const progress = (status === 'open') 
+      ? sessionProgress(m.tz, m.open[0], m.open[1], m.close[0], m.close[1]) 
+      : 0;
+
+    let nextLabel = '', nextTime = '';
+    if (status === 'open' || status === 'lunch' || status === 'pre') {
+      const until = timeUntil(m.tz, m.close[0], m.close[1]);
+      nextLabel = status === 'pre' ? 'OPENS IN' : 'CLOSES IN';
+      if (status === 'pre') {
+        const u2 = timeUntil(m.tz, m.open[0], m.open[1]);
+        nextTime = `${u2.h}h ${String(u2.m).padStart(2,'0')}m`;
+      } else {
+        nextTime = until.h > 0 ? `${until.h}h ${String(until.m).padStart(2,'0')}m` : `${String(until.m).padStart(2,'0')}m ${String(until.s).padStart(2,'0')}s`;
+      }
+    } else {
+      const until = timeUntil(m.tz, m.open[0], m.open[1]);
+      nextLabel = 'OPENS IN';
+      nextTime = until.h > 0 ? `${until.h}h ${String(until.m).padStart(2,'0')}m` : `${String(until.m).padStart(2,'0')}m ${String(until.s).padStart(2,'0')}s`;
+    }
+
+    const statusLabel = { open: 'OPEN', closed: 'CLOSED', pre: 'PRE-MKT', lunch: 'LUNCH' }[status];
+
+    const card = document.createElement('div');
+    card.className = `market-card ${status}`;
+    card.innerHTML = `
+      <div class="card-top">
+        <div>
+          <div class="market-name">${m.name}</div>
+          <div class="market-ticker">${m.ticker}</div>
+        </div>
+        <div class="status-badge ${status}">${statusLabel}</div>
+      </div>
+      <div class="card-times">
+        <div class="time-block">
+          <div class="time-label">OPEN (LOCAL)</div>
+          <div class="time-val ${status === 'open' ? 'highlight' : ''}">${m.alwaysOn && m.id === 'crypto' ? '24/7' : openLocal}</div>
+        </div>
+        <div class="time-block">
+          <div class="time-label">CLOSE (LOCAL)</div>
+          <div class="time-val">${m.alwaysOn && m.id === 'crypto' ? '24/7' : closeLocal}</div>
+        </div>
+      </div>
+      <div class="card-bottom">
+        <div class="next-event">${nextLabel} <span>${nextTime}</span></div>
+      </div>
+      <div class="session-progress">
+        <div class="session-progress-fill" style="width:${progress.toFixed(1)}%"></div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function renderForex() {
+  const row = document.getElementById('forex-row');
+  if (!row) return;
+  row.innerHTML = '';
+  FX_PAIRS.forEach(pair => {
+    const cell = document.createElement('div');
+    cell.className = 'forex-cell';
+    cell.innerHTML = `<div class="fx-pair">${pair}</div>`;
+    row.appendChild(cell);
+  });
+}
+
+function renderCountdowns() {
+  const strip = document.getElementById('countdown-strip');
+  strip.innerHTML = '';
+
+  const key = [
+    { label: 'NYSE / NASDAQ', id: 'nasdaq' },
+    { label: 'LONDON LSE',    id: 'lse'    },
+    { label: 'FRANKFURT DAX', id: 'xetra'  },
+    { label: 'NIKKEI 225',    id: 'tse'    },
+    { label: 'HANG SENG',     id: 'hkex'   },
+  ];
+
+  key.forEach(k => {
+    const m = MARKETS.find(x => x.id === k.id);
+    const status = getMarketStatus(m);
+    const isOpen = status === 'open';
+    const until = isOpen
+      ? timeUntil(m.tz, m.close[0], m.close[1])
+      : timeUntil(m.tz, m.open[0],  m.open[1]);
+    const label  = isOpen ? `CLOSES IN` : `OPENS IN`;
+    const urgent = !isOpen && until.ms < 1800000; // under 30 min
+
+    const item = document.createElement('div');
+    item.className = 'countdown-item';
+    item.innerHTML = `
+      <div class="countdown-dot ${isOpen ? 'open' : 'closed'}"></div>
+      <div>
+        <div class="countdown-label">${k.label} · ${label}</div>
+        <div class="countdown-val ${urgent ? 'urgent' : ''}">
+          ${until.h > 0 ? until.h + 'h ' : ''}${String(until.m).padStart(2,'0')}m ${String(until.s).padStart(2,'0')}s
+        </div>
+      </div>
+    `;
+    strip.appendChild(item);
+  });
+}
+
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('local-time').textContent = `${h}:${m}:${s}`;
+
+  const days   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('local-date').textContent =
+    `${days[now.getDay()]} ${String(now.getDate()).padStart(2,'0')} ${months[now.getMonth()]} ${now.getFullYear()}`;
+
+  const tzStr = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const offset = -now.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const oh = String(Math.floor(Math.abs(offset)/60)).padStart(2,'0');
+  const om = String(Math.abs(offset)%60).padStart(2,'0');
+  document.getElementById('local-tz').textContent = `${tzStr} · UTC${sign}${oh}:${om}`;
+}
+
+function fullUpdate() {
+  updateClock();
+  renderSessionBar();
+  renderCountdowns();
+  renderMarkets();
+
+  const now = new Date();
+  document.getElementById('last-update').textContent =
+    `LAST UPDATE: ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+}
+
+// Initial render
+renderForex();
+fullUpdate();
+
+// Clock every second, full refresh every 30s
+setInterval(updateClock, 1000);
+setInterval(renderCountdowns, 1000); // countdown ticks every second
+setInterval(() => {
+  renderSessionBar();
+  renderMarkets();
+}, 15000);
+
+// Full data refresh every 30s
+setInterval(fullUpdate, 30000);
+</script>
+</body>
+</html>
