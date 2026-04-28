@@ -328,7 +328,12 @@
   }
 
   .market-card.open::before { background: var(--green); }
-  .market-card.closed::before { background: var(--text3); }
+  .market-card.closed::before { background: var(--border2); }
+  .market-card.closed .market-name,
+  .market-card.closed .market-ticker,
+  .market-card.closed .time-val,
+  .market-card.closed .time-label,
+  .market-card.closed .next-event { opacity: 0.4; }
   .market-card.pre::before { background: var(--yellow); }
   .market-card.lunch::before { background: var(--blue); }
 
