@@ -153,9 +153,9 @@
   .session-block.active { opacity: 1; }
   .session-block.inactive { opacity: 0.3; }
 
-  .session-block.asia { background: rgba(77,184,255,0.25); color: var(--blue); border: 1px solid rgba(77,184,255,0.3); }
-  .session-block.europe { background: rgba(255,215,64,0.2); color: var(--yellow); border: 1px solid rgba(255,215,64,0.25); }
-  .session-block.us { background: rgba(0,230,118,0.2); color: var(--green); border: 1px solid rgba(0,230,118,0.25); }
+  .session-block.asia { background: rgba(220,100,160,0.25); color: #e06faa; border: 1px solid rgba(220,100,160,0.35); }
+  .session-block.europe { background: rgba(100,185,255,0.22); color: #6ab9ff; border: 1px solid rgba(100,185,255,0.3); }
+  .session-block.us { background: rgba(255,215,64,0.2); color: var(--yellow); border: 1px solid rgba(255,215,64,0.25); }
   .session-block.overlap { background: rgba(255,100,50,0.35); color: #ff9060; border: 1px solid rgba(255,100,50,0.4); }
 
   .session-block.pre-market {
@@ -166,7 +166,7 @@
       rgba(255,255,255,0.07) 3px,
       rgba(255,255,255,0.07) 6px
     );
-    opacity: 0.75;
+    opacity: 0.45;
   }
 
   .time-ruler {
@@ -683,14 +683,13 @@ const MARKETS = [
   }
 ];
 
-// UTC hours [start, end] for session timeline blocks
+// UTC hours — TSE proxy for Asia, LSE for London, NYSE for US
 const SESSIONS = [
-  { label: 'ASIA',          start: 0,    end: 9,    cls: 'asia'    },
-  { label: 'EU PRE',        start: 7,    end: 9,    cls: 'europe',  pre: true },
-  { label: 'EU',            start: 9,    end: 16.5, cls: 'europe'  },
-  { label: 'US PRE',        start: 9,    end: 14.5, cls: 'us',      pre: true },
-  { label: 'US',            start: 14.5, end: 20.5, cls: 'us'      },
-  { label: 'EU+US OVERLAP', start: 14.5, end: 16.5, cls: 'overlap' },
+  { label: 'ASIA',    start: 0,    end: 6,    cls: 'asia'                 },
+  { label: 'LONDON',  start: 8,    end: 16.5, cls: 'europe'               },
+  { label: 'US PRE',  start: 9,    end: 14.5, cls: 'us',    pre: true     },
+  { label: 'US',      start: 14.5, end: 21,   cls: 'us'                   },
+  { label: 'LDN/US',  start: 14.5, end: 16.5, cls: 'overlap'              },
 ];
 
 const FX_PAIRS = [
@@ -897,7 +896,7 @@ function renderSessionBar() {
 
     const active = utcH >= s.start && utcH < s.end;
     div.classList.add(active ? 'active' : 'inactive');
-    if (s.end - s.start > 2) div.textContent = s.label;
+    if (s.end - s.start > 2 && !s.pre) div.textContent = s.label;
     if (s.pre) div.classList.add('pre-market');
     timeline.insertBefore(div, needle);
   });
