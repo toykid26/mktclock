@@ -877,6 +877,27 @@ function renderTimeRuler() {
   }).join('');
 }
 
+// Convert a market-local [h, m] to fractional UTC hours, DST-aware
+function mktLocalToUTCHour(tz, h, m) {
+  const now = new Date();
+  // Get today's date string in the target timezone
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+  const yr  = dateParts.find(p => p.type === 'year').value;
+  const mo  = dateParts.find(p => p.type === 'month').value;
+  const dy  = dateParts.find(p => p.type === 'day').value;
+  // Build a Date as if it's that h:m in the target tz by using UTC and offset
+  const probe = new Date(`${yr}-${mo}-${dy}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
+  // Get the UTC offset for that tz right now
+  const tzOffset = (() => {
+    const utcD = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzD  = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+    return (tzD - utcD) / 36e5;
+  })();
+  return h - tzOffset + m / 60;
+}
+
 function renderSessionBar() {
   renderTimeRuler();
   const timeline = document.getElementById('session-timeline');
@@ -888,7 +909,21 @@ function renderSessionBar() {
   const needle = document.getElementById('time-needle');
   needle.style.left = `${(utcH / 24) * 100}%`;
 
-  SESSIONS.forEach(s => {
+  // Derive US pre-market start dynamically so it follows DST
+  const nyse = MARKETS.find(m => m.id === 'nasdaq');
+  const usPreStartUTC  = nyse ? mktLocalToUTCHour('America/New_York', nyse.pre[0], nyse.pre[1]) : 9;
+  const usOpenUTC      = nyse ? mktLocalToUTCHour('America/New_York', nyse.open[0], nyse.open[1]) : 14.5;
+  const usCloseUTC     = nyse ? mktLocalToUTCHour('America/New_York', nyse.close[0], nyse.close[1]) : 21;
+
+  const dynamicSessions = [
+    { label: 'ASIA',    start: 0,            end: 6,           cls: 'asia'                },
+    { label: 'LONDON',  start: 8,            end: 16.5,        cls: 'europe'              },
+    { label: 'US PRE',  start: usPreStartUTC, end: usOpenUTC,  cls: 'us',  pre: true      },
+    { label: 'US',      start: usOpenUTC,    end: usCloseUTC,  cls: 'us'                  },
+    { label: 'LDN/US',  start: usOpenUTC,    end: 16.5,        cls: 'overlap'             },
+  ];
+
+  dynamicSessions.forEach(s => {
     const div = document.createElement('div');
     div.className = `session-block ${s.cls}`;
     div.style.left  = `${(s.start / 24) * 100}%`;
