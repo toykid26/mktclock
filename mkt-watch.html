@@ -733,9 +733,8 @@ const MARKETS = [
   {
     id: 'cme', name: 'CME Futures', ticker: 'ES / NQ / RTY',
     tz: 'America/Chicago',
-    open: [17,0], close: [16,0],
-    note: '23h/day Sun–Fri',
-    alwaysOn: true,
+    open: [17,0], close: [16,0],       // spans midnight — 17:00 open, 16:00 close next day
+    maintenance: [16,0], maintenanceEnd: [17,0], // daily 1h break 16:00-17:00 CT
     session: 'US'
   },
   {
@@ -836,16 +835,28 @@ function isWeekend(tz) {
 }
 
 function getMarketStatus(m) {
-  if (m.alwaysOn) {
-    if (m.id === 'cme' && isWeekend('America/Chicago')) {
-      // CME closed Fri 5pm – Sun 6pm CT roughly
-      const t = getLocalTimeInTZ('America/Chicago');
-      const mins = t.h * 60 + t.m;
-      if (t.day === 'Sat') return 'closed';
-      if (t.day === 'Sun' && mins < 18 * 60) return 'closed';
-    }
+  // Crypto — always open
+  if (m.alwaysOn) return 'open';
+
+  // CME — special case: spans midnight, 1h maintenance, closed Fri 16:00 - Sun 17:00 CT
+  if (m.id === 'cme') {
+    const t = getLocalTimeInTZ('America/Chicago');
+    const mins = t.h * 60 + t.m;
+    const maintStart = m.maintenance[0] * 60 + m.maintenance[1];   // 16:00 = 960
+    const maintEnd   = m.maintenanceEnd[0] * 60 + m.maintenanceEnd[1]; // 17:00 = 1020
+
+    // Fully closed windows
+    if (t.day === 'Sat') return 'closed';
+    if (t.day === 'Fri' && mins >= maintStart) return 'closed'; // Fri 16:00+ = closed for weekend
+    if (t.day === 'Sun' && mins < maintEnd) return 'closed';    // Sun before 17:00 = closed
+
+    // Daily maintenance break 16:00-17:00 (except Friday which is already caught above)
+    if (mins >= maintStart && mins < maintEnd) return 'lunch';
+
+    // Otherwise open (session spans midnight so no simple open/close comparison needed)
     return 'open';
   }
+
   if (isWeekend(m.tz)) return 'closed';
 
   const t = getLocalTimeInTZ(m.tz);
@@ -859,7 +870,7 @@ function getMarketStatus(m) {
     if (mins >= lunchMins && mins < lunchEndMins) return 'lunch';
   }
 
-  if (m.pre && !m.alwaysOn) {
+  if (m.pre) {
     const preMins = m.pre[0] * 60 + m.pre[1];
     if (mins >= preMins && mins < openMins) return 'pre';
   }
@@ -1031,12 +1042,16 @@ function renderSessionBar() {
   const usOpenUTC      = nyse ? mktLocalToUTCHour('America/New_York', nyse.open[0], nyse.open[1]) : 14.5;
   const usCloseUTC     = nyse ? mktLocalToUTCHour('America/New_York', nyse.close[0], nyse.close[1]) : 21;
 
+  // Derive London times dynamically too — BST vs GMT shifts the open by 1h
+  const ldnOpenUTC  = mktLocalToUTCHour('Europe/London', 8, 0);
+  const ldnCloseUTC = mktLocalToUTCHour('Europe/London', 16, 30);
+
   const dynamicSessions = [
-    { label: 'ASIA',    start: 0,            end: 6,           cls: 'asia'                },
-    { label: 'LONDON',  start: 8,            end: 16.5,        cls: 'europe'              },
-    { label: 'US PRE',  start: usPreStartUTC, end: usOpenUTC,  cls: 'us',  pre: true      },
-    { label: 'US',      start: usOpenUTC,    end: usCloseUTC,  cls: 'us'                  },
-    { label: 'LDN/US',  start: usOpenUTC,    end: 16.5,        cls: 'overlap'             },
+    { label: 'ASIA',    start: 0,             end: 6,            cls: 'asia'           },
+    { label: 'LONDON',  start: ldnOpenUTC,    end: ldnCloseUTC,  cls: 'europe'         },
+    { label: 'US PRE',  start: usPreStartUTC, end: usOpenUTC,    cls: 'us', pre: true  },
+    { label: 'US',      start: usOpenUTC,     end: usCloseUTC,   cls: 'us'             },
+    { label: 'LDN/US',  start: usOpenUTC,     end: ldnCloseUTC,  cls: 'overlap'        },
   ];
 
   dynamicSessions.forEach(s => {
@@ -1085,32 +1100,63 @@ function renderMarkets() {
     const statusLabel = { open: 'OPEN', closed: 'CLOSED', pre: 'PRE-MKT', lunch: 'LUNCH' }[status];
 
     const card = document.createElement('div');
-    card.className = `market-card ${status}`;
-    card.innerHTML = `
-      <div class="card-top">
-        <div>
-          <div class="market-name">${m.name}</div>
-          <div class="market-ticker">${m.ticker}</div>
+
+    // Crypto gets a completely different card — always open, no times, no progress
+    if (m.alwaysOn) {
+      card.className = 'market-card open';
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="market-name">${m.name}</div>
+            <div class="market-ticker">${m.ticker}</div>
+          </div>
+          <div class="status-badge open">OPEN 24/7</div>
         </div>
-        <div class="status-badge ${status}">${statusLabel}</div>
-      </div>
-      <div class="card-times">
-        <div class="time-block">
-          <div class="time-label">OPEN (LOCAL)</div>
-          <div class="time-val ${status === 'open' ? 'highlight' : ''}">${m.alwaysOn && m.id === 'crypto' ? '24/7' : openLocal}</div>
+        <div class="card-times">
+          <div class="time-block">
+            <div class="time-label">HOURS</div>
+            <div class="time-val highlight">24 / 7 / 365</div>
+          </div>
+          <div class="time-block">
+            <div class="time-label">CLOSES</div>
+            <div class="time-val">NEVER</div>
+          </div>
         </div>
-        <div class="time-block">
-          <div class="time-label">CLOSE (LOCAL)</div>
-          <div class="time-val">${m.alwaysOn && m.id === 'crypto' ? '24/7' : closeLocal}</div>
+        <div class="card-bottom">
+          <div class="next-event">ALWAYS ACTIVE</div>
         </div>
-      </div>
-      <div class="card-bottom">
-        <div class="next-event">${nextLabel} <span>${nextTime}</span></div>
-      </div>
-      <div class="session-progress">
-        <div class="session-progress-fill" style="width:${progress.toFixed(1)}%"></div>
-      </div>
-    `;
+        <div class="session-progress">
+          <div class="session-progress-fill" style="width:100%"></div>
+        </div>
+      `;
+    } else {
+      card.className = `market-card ${status}`;
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="market-name">${m.name}</div>
+            <div class="market-ticker">${m.ticker}</div>
+          </div>
+          <div class="status-badge ${status}">${statusLabel}</div>
+        </div>
+        <div class="card-times">
+          <div class="time-block">
+            <div class="time-label">OPEN (LOCAL)</div>
+            <div class="time-val ${status === 'open' ? 'highlight' : ''}">${openLocal}</div>
+          </div>
+          <div class="time-block">
+            <div class="time-label">CLOSE (LOCAL)</div>
+            <div class="time-val">${closeLocal}</div>
+          </div>
+        </div>
+        <div class="card-bottom">
+          <div class="next-event">${nextLabel} <span>${nextTime}</span></div>
+        </div>
+        <div class="session-progress">
+          <div class="session-progress-fill" style="width:${progress.toFixed(1)}%"></div>
+        </div>
+      `;
+    }
     grid.appendChild(card);
   });
 }
