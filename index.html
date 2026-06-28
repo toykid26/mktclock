@@ -642,7 +642,7 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 100%;
+      height: 100vh;
       z-index: 0;
       overflow: hidden;
       pointer-events: none;
@@ -698,21 +698,32 @@
     .market-card::before { display: none; }
 
     .markets-grid {
-      grid-template-columns: 1fr;
-      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      overflow: visible;
     }
 
     .market-card {
       padding: 12px 14px;
     }
 
+    .market-card .card-top {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .market-card .status-badge {
+      align-self: flex-start;
+    }
+
     .market-card .card-times,
     .market-card .session-progress {
       display: none;
-    }
-
-    .market-card .card-top {
-      margin-bottom: 4px;
     }
 
     .market-name { font-size: 14px; }
@@ -724,13 +735,19 @@
     }
 
     .countdown-strip {
-      display: flex;
+      display: grid;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(2, auto);
+      grid-auto-columns: 160px;
       overflow-x: auto;
       gap: 10px;
       padding-bottom: 4px;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
       scroll-snap-type: x mandatory;
+      background: transparent;
+      border: none;
+      border-radius: 0;
       mask-image: linear-gradient(to right, black 92%, transparent 100%);
       -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
     }
@@ -741,8 +758,6 @@
 
     .countdown-item {
       scroll-snap-align: start;
-      flex: 0 0 auto;
-      min-width: 150px;
       padding: 10px 14px;
     }
 
@@ -846,6 +861,10 @@
   <div class="section-header">
     <div class="section-label">EQUITY MARKETS</div>
     <div class="section-divider"></div>
+    <div class="kz-toggle-btn" onclick="toggleHideClosed()">
+      <div class="kz-pip" id="hide-closed-pip"><div class="kz-pip-dot"></div></div>
+      HIDE CLOSED
+    </div>
   </div>
   <div class="markets-grid" id="markets-grid"></div>
 
@@ -1215,12 +1234,15 @@ function renderSessionBar() {
   });
 }
 
+let hideClosedMarkets = localStorage.getItem('hideClosedMarkets') === '1';
+
 function renderMarkets() {
   const grid = document.getElementById('markets-grid');
   grid.innerHTML = '';
 
   MARKETS.forEach(m => {
     const status = getMarketStatus(m);
+    if (hideClosedMarkets && status === 'closed') return;
     const openLocal  = mktTimeToLocal(m.tz, m.open[0],  m.open[1]);
     const closeLocal = mktTimeToLocal(m.tz, m.close[0], m.close[1]);
 
@@ -1332,13 +1354,19 @@ function renderCountdowns() {
     { label: 'HANG SENG',     id: 'hkex'   },
   ];
 
-  key.forEach(k => {
+  const items = key.map(k => {
     const m = MARKETS.find(x => x.id === k.id);
     const status = getMarketStatus(m);
     const isOpen = status === 'open';
     const until = isOpen
       ? timeUntil(m.tz, m.close[0], m.close[1])
       : timeUntil(m.tz, m.open[0],  m.open[1]);
+    return { k, isOpen, until };
+  });
+
+  items.sort((a, b) => a.until.ms - b.until.ms);
+
+  items.forEach(({ k, isOpen, until }) => {
     const label  = isOpen ? `CLOSES IN` : `OPENS IN`;
     const urgent = !isOpen && until.ms < 1800000; // under 30 min
 
@@ -1392,12 +1420,21 @@ function fullUpdate() {
 renderForex();
 fullUpdate();
 
+function syncGlassBgHeight() {
+  const bg = document.querySelector('.glass-bg');
+  if (bg) bg.style.height = document.body.scrollHeight + 'px';
+}
+syncGlassBgHeight();
+window.addEventListener('resize', syncGlassBgHeight);
+window.addEventListener('load', syncGlassBgHeight);
+
 // Clock every second, full refresh every 30s
 setInterval(updateClock, 1000);
 setInterval(renderCountdowns, 1000); // countdown ticks every second
 setInterval(() => {
   renderSessionBar();
   renderMarkets();
+  syncGlassBgHeight();
 }, 15000);
 
 // Full data refresh every 30s
@@ -1464,11 +1501,24 @@ function toggleKillZones() {
   timeline.classList.toggle('kz-active', on);
   if (on) renderKillZones();
   localStorage.setItem('kzVisible', on ? '1' : '0');
+  syncGlassBgHeight();
 }
 
 // Restore KZ state on load
 if (localStorage.getItem('kzVisible') === '1') {
   toggleKillZones();
+}
+
+function toggleHideClosed() {
+  hideClosedMarkets = !hideClosedMarkets;
+  document.getElementById('hide-closed-pip').classList.toggle('on', hideClosedMarkets);
+  localStorage.setItem('hideClosedMarkets', hideClosedMarkets ? '1' : '0');
+  renderMarkets();
+  syncGlassBgHeight();
+}
+
+if (hideClosedMarkets) {
+  document.getElementById('hide-closed-pip').classList.add('on');
 }
 
 function toggleTheme() {
