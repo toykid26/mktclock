@@ -4,1563 +4,248 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MKTCLOCK — Market Hours</title>
+<meta name="description" content="Live open and close times, session countdowns and kill zones for the world's major equity, futures and FX markets, in your local timezone.">
+<meta name="theme-color" content="#0a0c0f">
+<link rel="canonical" href="https://www.mktclock.xyz/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="MKTCLOCK — Market Hours">
+<meta property="og:description" content="Live market hours, session countdowns and kill zones in your local timezone.">
+<meta property="og:url" content="https://www.mktclock.xyz/">
+<meta property="og:image" content="https://www.mktclock.xyz/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0a0c0f;
-    --bg2: #0f1217;
-    --bg3: #151a22;
-    --border: #1e2530;
-    --border2: #252e3d;
-    --text: #dde6f0;
-    --text2: #8a9db5;
-    --text3: #566a80;
-    --green: #00e676;
-    --green-dim: #00b35a;
-    --green-bg: rgba(0,230,118,0.06);
-    --red: #ff4444;
-    --red-dim: #cc2222;
-    --red-bg: rgba(255,68,68,0.06);
-    --yellow: #ffd740;
-    --yellow-bg: rgba(255,215,64,0.06);
-    --blue: #4db8ff;
-    --blue-bg: rgba(77,184,255,0.06);
-    --accent: #2563eb;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 14px;
-    min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
-  }
-
-  /* Scan line effect */
-  body::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,0.03) 2px,
-      rgba(0,0,0,0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 1000;
-  }
-
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg2);
-  }
-
-  .logo {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.2em;
-    color: var(--text2);
-  }
-
-  .logo span {
-    color: var(--blue);
-  }
-
-  .header-clock {
-    text-align: right;
-  }
-
-  #local-time {
-    font-size: 22px;
-    font-weight: 500;
-    color: var(--text);
-    letter-spacing: 0.05em;
-  }
-
-  #local-date {
-    font-size: 10px;
-    color: var(--text2);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-top: 2px;
-  }
-
-  #local-tz {
-    font-size: 10px;
-    color: var(--text3);
-    letter-spacing: 0.1em;
-  }
-
-  .main {
-    padding: 20px 24px;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-
-  /* Session overlap bar */
-  .session-bar-wrap {
-    margin-bottom: 20px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 14px 16px;
-  }
-
-  .section-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.25em;
-    color: var(--text2);
-    text-transform: uppercase;
-    margin-bottom: 10px;
-  }
-
-  .session-timeline {
-    position: relative;
-    height: 28px;
-    background: var(--bg);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-bottom: 8px;
-  }
-
-  .session-block {
-    position: absolute;
-    height: 100%;
-    border-radius: 1px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    opacity: 0.85;
-    transition: opacity 0.3s;
-  }
-
-  .session-block.active { opacity: 1; }
-  .session-block.inactive { opacity: 0.3; }
-
-  .session-block.asia { background: rgba(220,100,160,0.25); color: #e06faa; border: 1px solid rgba(220,100,160,0.35); }
-  .session-block.europe { background: rgba(100,185,255,0.22); color: #6ab9ff; border: 1px solid rgba(100,185,255,0.3); }
-  .session-block.us { background: rgba(255,215,64,0.2); color: var(--yellow); border: 1px solid rgba(255,215,64,0.25); }
-  .session-block.overlap { background: rgba(255,100,50,0.35); color: #ff9060; border: 1px solid rgba(255,100,50,0.4); }
-
-  .session-block.pre-market {
-    background-image: repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 3px,
-      rgba(255,255,255,0.07) 3px,
-      rgba(255,255,255,0.07) 6px
-    );
-    opacity: 0.45;
-  }
-
-  .time-ruler {
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .session-bar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-
-  .session-bar-header .section-label { margin-bottom: 0; }
-
-  .session-bar-key {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .key-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    color: var(--text2);
-  }
-
-  .key-swatch {
-    width: 18px; height: 9px;
-    border-radius: 2px; flex-shrink: 0;
-  }
-
-  .key-swatch.hatch {
-    background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.15) 2px, rgba(255,255,255,0.15) 4px);
-    background-color: rgba(255,215,64,0.12);
-    border: 0.5px solid rgba(255,215,64,0.3);
-  }
-
-  .key-swatch.kz {
-    background: rgba(200,40,40,0.45);
-    border: 0.5px solid rgba(200,40,40,0.6);
-  }
-
-  .kz-toggle-btn {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 9px; letter-spacing: 0.1em;
-    color: var(--text2); cursor: pointer;
-    padding-left: 10px;
-    border-left: 0.5px solid var(--border);
-    user-select: none;
-  }
-
-  .kz-pip {
-    width: 24px; height: 12px;
-    border-radius: 6px;
-    background: var(--bg);
-    border: 0.5px solid var(--border2);
-    position: relative;
-    flex-shrink: 0;
-    transition: background 0.2s, border-color 0.2s;
-  }
-
-  .kz-pip.on { background: rgba(200,40,40,0.7); border-color: rgba(200,40,40,0.8); }
-
-  .kz-pip-dot {
-    position: absolute; top: 2px; left: 2px;
-    width: 8px; height: 8px;
-    background: #fff; border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-    transition: left 0.2s;
-  }
-
-  .kz-pip.on .kz-pip-dot { left: 14px; }
-
-  .kz-row {
-    position: relative; height: 8px;
-    background: var(--bg);
-    border-radius: 0 0 2px 2px;
-    overflow: hidden;
-    margin-top: 2px;
-    display: none;
-  }
-
-  .kz-row.visible { display: block; }
-
-  .session-timeline.kz-active { border-radius: 2px 2px 0 0; margin-bottom: 0; }
-
-  .kz-block {
-    position: absolute; height: 100%;
-    background: rgba(200,40,40,0.5);
-  }
-
-  .kz-needle {
-    position: absolute; top: 0; width: 1px; height: 100%;
-    background: rgba(255,255,255,0.4); z-index: 10;
-  }
-
-  .time-ruler-tick {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .time-ruler-utc {
-    font-size: 10px;
-    color: var(--text3);
-    letter-spacing: 0.05em;
-  }
-
-  .time-ruler-local {
-    font-size: 10px;
-    color: var(--text);
-    letter-spacing: 0.05em;
-  }
-
-  .current-time-needle {
-    position: absolute;
-    top: 0;
-    width: 1px;
-    height: 100%;
-    background: rgba(255,255,255,0.7);
-    z-index: 10;
-  }
-
-  /* Market grid */
-  .markets-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 20px;
-  }
-
-  .market-card {
-    background: var(--bg2);
-    padding: 14px 16px;
-    cursor: default;
-    transition: background 0.15s;
-    position: relative;
-  }
-
-  .market-card:hover {
-    background: var(--bg3);
-  }
-
-  .market-card::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 2px;
-  }
-
-  .market-card.open::before { background: var(--green); }
-  .market-card.closed::before { background: var(--border2); }
-  .market-card.closed .market-name,
-  .market-card.closed .market-ticker,
-  .market-card.closed .time-val,
-  .market-card.closed .time-label,
-  .market-card.closed .next-event { opacity: 0.4; }
-  .market-card.pre::before { background: var(--yellow); }
-  .market-card.lunch::before { background: var(--blue); }
-
-  .card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 10px;
-  }
-
-  .market-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-    letter-spacing: 0.02em;
-  }
-
-  .market-ticker {
-    font-size: 11px;
-    color: var(--text2);
-    letter-spacing: 0.1em;
-    margin-top: 2px;
-  }
-
-  .status-badge {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    padding: 2px 7px;
-    border-radius: 2px;
-    text-transform: uppercase;
-  }
-
-  .status-badge.open { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,230,118,0.2); }
-  .status-badge.closed { background: rgba(255,255,255,0.03); color: var(--text3); border: 1px solid var(--border); }
-  .status-badge.pre { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(255,215,64,0.2); }
-  .status-badge.lunch { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(77,184,255,0.2); }
-
-  .card-times {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 10px;
-  }
-
-  .time-block { flex: 1; }
-
-  .time-label {
-    font-size: 10px;
-    color: var(--text2);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 3px;
-  }
-
-  .time-val {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text2);
-  }
-
-  .time-val.highlight { color: var(--text); }
-
-  .card-bottom {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .next-event {
-    font-size: 11px;
-    color: var(--text2);
-  }
-
-  .next-event span { color: var(--text); }
-
-  .delta {
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .delta.pos { color: var(--green); }
-  .delta.neg { color: var(--red); }
-  .delta.neu { color: var(--text3); }
-
-  .delta-arrow { font-size: 10px; }
-
-  /* Progress bar for open time */
-  .session-progress {
-    height: 2px;
-    background: var(--border);
-    border-radius: 1px;
-    margin-top: 10px;
-    overflow: hidden;
-  }
-
-  .session-progress-fill {
-    height: 100%;
-    border-radius: 1px;
-    background: var(--green-dim);
-    transition: width 1s linear;
-  }
-
-  .market-card.closed .session-progress-fill {
-    background: var(--text3);
-    width: 0% !important;
-  }
-
-  /* Forex section */
-  .forex-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 20px;
-  }
-
-  .forex-cell {
-    background: var(--bg2);
-    padding: 12px 14px;
-    transition: background 0.15s;
-  }
-
-  .forex-cell:hover { background: var(--bg3); }
-
-  .fx-pair {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-
-  .fx-price {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text);
-    margin-bottom: 3px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .fx-delta {
-    font-size: 10px;
-    font-weight: 500;
-  }
-
-  .fx-delta.pos { color: var(--green); }
-  .fx-delta.neg { color: var(--red); }
-
-  /* Countdown timer */
-  .countdown-strip {
-    display: flex;
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 20px;
-  }
-
-  .countdown-item {
-    flex: 1;
-    background: var(--bg2);
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .countdown-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .countdown-dot.open { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
-  .countdown-dot.closed { background: var(--text3); }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .countdown-label {
-    font-size: 11px;
-    color: var(--text2);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .countdown-val {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-    margin-top: 1px;
-  }
-
-  .countdown-val.urgent { color: var(--yellow); }
-
-  /* Footer */
-  .footer {
-    padding: 12px 24px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--text2);
-    letter-spacing: 0.1em;
-  }
-
-  .live-dot {
-    display: inline-block;
-    width: 5px; height: 5px;
-    background: var(--green);
-    border-radius: 50%;
-    margin-right: 5px;
-    animation: pulse 2s infinite;
-  }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-
-  .section-header .section-label { margin-bottom: 0; }
-
-  .section-divider {
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  body.light {
-    --bg: #f4f6f9;
-    --bg2: #ffffff;
-    --bg3: #e8ecf2;
-    --border: #d0d9e8;
-    --border2: #b8c5d9;
-    --text: #1a2333;
-    --text2: #4a5d78;
-    --text3: #8a9db5;
-    --green: #00a854;
-    --green-dim: #007a3d;
-    --green-bg: rgba(0,168,84,0.08);
-    --red: #d93025;
-    --red-dim: #b02218;
-    --red-bg: rgba(217,48,37,0.08);
-    --yellow: #c17f00;
-    --yellow-bg: rgba(193,127,0,0.08);
-    --blue: #1a73e8;
-    --blue-bg: rgba(26,115,232,0.08);
-  }
-
-  body.light::before { display: none; }
-
-  .theme-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-
-  .toggle-icon { font-size: 14px; line-height: 1; user-select: none; }
-
-  .toggle-track {
-    position: relative;
-    width: 36px;
-    height: 20px;
-    background: var(--border2);
-    border-radius: 10px;
-    transition: background 0.25s;
-    flex-shrink: 0;
-  }
-
-  .toggle-track.on { background: var(--accent); }
-
-  .toggle-thumb {
-    position: absolute;
-    top: 3px; left: 3px;
-    width: 14px; height: 14px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform 0.25s;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  }
-
-  .toggle-track.on .toggle-thumb { transform: translateX(16px); }
-
-  .glass-bg { display: none; }
-
-  @media (max-width: 680px) {
-    .glass-bg {
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 100vh;
-      z-index: 0;
-      overflow: hidden;
-      pointer-events: none;
-    }
-
-    .glass-blob {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(70px);
-      opacity: 0.14;
-    }
-
-    body.light .glass-blob {
-      opacity: 0.32;
-    }
-
-    .glass-blob.pink   { width: 240px; height: 240px; background: #e06faa; top: 0%;   left: -70px; }
-    .glass-blob.blue   { width: 280px; height: 280px; background: #4d9fff; top: 12%;  right: -90px; }
-    .glass-blob.amber  { width: 220px; height: 220px; background: #ffd740; top: 30%;  left: -60px; }
-    .glass-blob.pink2  { width: 220px; height: 220px; background: #e06faa; top: 50%;  right: -70px; }
-    .glass-blob.blue2  { width: 240px; height: 240px; background: #4d9fff; top: 68%;  left: -60px; }
-    .glass-blob.amber2 { width: 200px; height: 200px; background: #ffd740; top: 86%;  right: -50px; }
-
-    .header, .main { position: relative; z-index: 1; }
-
-    body { overflow-x: hidden; }
-
-    .header {
-      padding: 14px 16px;
-      border-radius: 0 0 24px 24px;
-    }
-
-    .session-bar-wrap {
-      background: rgba(15,16,24,0.55);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 0.5px solid rgba(255,255,255,0.14);
-      border-radius: 22px;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 8px 20px rgba(0,0,0,0.3);
-    }
-
-    body.light .session-bar-wrap {
-      background: rgba(255,255,255,0.55);
-      border: 0.5px solid rgba(0,0,0,0.08);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 8px 20px rgba(0,0,0,0.08);
-    }
-
-    .session-timeline {
-      isolation: isolate;
-    }
-
-    .market-card,
-    .countdown-item {
-      background: rgba(255,255,255,0.07);
-      backdrop-filter: blur(20px) saturate(1.3);
-      -webkit-backdrop-filter: blur(20px) saturate(1.3);
-      border: 0.5px solid rgba(255,255,255,0.18);
-      border-radius: 22px;
-      border-left: 0.5px solid rgba(255,255,255,0.18);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 20px rgba(0,0,0,0.3);
-    }
-
-    .market-card::before { display: none; }
-
-    .markets-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      overflow: visible;
-    }
-
-    .market-card {
-      padding: 12px 14px;
-    }
-
-    .market-card .card-top {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
-      margin-bottom: 6px;
-    }
-
-    .market-card .status-badge {
-      align-self: flex-start;
-    }
-
-    .market-card .card-times,
-    .market-card .session-progress {
-      display: none;
-    }
-
-    .market-name { font-size: 14px; }
-    .market-ticker { font-size: 10px; }
-
-    .card-bottom .next-event {
-      font-size: 11px;
-      margin-top: 2px;
-    }
-
-    .countdown-strip {
-      display: grid;
-      grid-auto-flow: column;
-      grid-template-rows: repeat(2, auto);
-      grid-auto-columns: calc((100% - 20px) / 3);
-      overflow-x: auto;
-      gap: 10px;
-      padding-bottom: 4px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      scroll-snap-type: x mandatory;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      mask-image: linear-gradient(to right, black 92%, transparent 100%);
-      -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
-    }
-
-    .countdown-strip::-webkit-scrollbar {
-      display: none;
-    }
-
-    .countdown-item {
-      scroll-snap-align: start;
-      padding: 10px 12px;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-    }
-
-    .countdown-label {
-      font-size: 9px;
-      letter-spacing: 0.04em;
-    }
-
-    .countdown-val {
-      font-size: 12px;
-    }
-
-    .session-timeline {
-      height: 22px;
-      border-radius: 14px;
-    }
-
-    .session-block { font-size: 0; }
-
-    .time-ruler-tick:nth-child(even) {
-      display: none;
-    }
-
-
-    .session-bar-header {
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .session-bar-key {
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-  }
+:root{--bg:#0a0c0f;--bg2:#0f1217;--bg3:#151a22;--border:#1e2530;--border2:#252e3d;--text:#dde6f0;--text2:#9aabc0;--text3:#7c8fa6;--green:#00e676;--green-dim:#00b35a;--green-bg:rgba(0,230,118,.06);--red:#ff4444;--yellow:#ffd740;--yellow-bg:rgba(255,215,64,.06);--blue:#4db8ff;--blue-bg:rgba(77,184,255,.06);--accent:#2563eb;--mono:'IBM Plex Mono',ui-monospace,monospace;--sans:'IBM Plex Sans',system-ui,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;min-height:100vh;position:relative;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);pointer-events:none;z-index:1000}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:3px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.logo{font-size:11px;font-weight:600;letter-spacing:.2em;color:var(--text2)}
+.logo span{color:var(--blue)}
+.header-clock{text-align:right}
+#local-time{font-size:22px;font-weight:500;color:var(--text);letter-spacing:.05em;font-variant-numeric:tabular-nums}
+#local-date{font-size:11px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-top:2px}
+#local-tz{font-size:11px;color:var(--text3);letter-spacing:.1em}
+.main{padding:20px 24px;max-width:1400px;margin:0 auto}
+.session-bar-wrap{margin-bottom:20px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:14px 16px}
+.section-label{font-size:11px;font-weight:600;letter-spacing:.25em;color:var(--text2);text-transform:uppercase;margin-bottom:10px}
+.session-timeline{position:relative;height:28px;background:var(--bg);border-radius:2px;overflow:hidden;margin-bottom:8px}
+.session-block{position:absolute;height:100%;border-radius:1px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;letter-spacing:.1em}
+.session-block.active{opacity:.9}
+.session-block.inactive{opacity:.32}
+.session-block.asia{background:rgba(220,100,160,.25);color:#e06faa;border:1px solid rgba(220,100,160,.35)}
+.session-block.europe{background:rgba(100,185,255,.22);color:#6ab9ff;border:1px solid rgba(100,185,255,.3)}
+.session-block.us{background:rgba(255,215,64,.2);color:var(--yellow);border:1px solid rgba(255,215,64,.25)}
+.session-block.overlap{background:rgba(255,100,50,.35);color:#ff9060;border:1px solid rgba(255,100,50,.4)}
+.session-block.pre-market{background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.07) 3px,rgba(255,255,255,.07) 6px)}
+.session-block.pre-market.inactive{opacity:.5}
+.time-ruler{display:flex;justify-content:space-between}
+.session-bar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.session-bar-header .section-label{margin-bottom:0}
+.session-bar-key{display:flex;align-items:center;gap:12px}
+.key-item{display:flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.1em;color:var(--text2)}
+.key-swatch{width:18px;height:9px;border-radius:2px;flex-shrink:0}
+.key-swatch.hatch{background-image:repeating-linear-gradient(45deg,transparent,transparent 2px,rgba(255,255,255,.15) 2px,rgba(255,255,255,.15) 4px);background-color:rgba(255,215,64,.12);border:.5px solid rgba(255,215,64,.3)}
+.key-swatch.kz{background:rgba(200,40,40,.45);border:.5px solid rgba(200,40,40,.6)}
+.kz-toggle-btn{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.1em;color:var(--text2);padding:4px 0 4px 10px;border-left:.5px solid var(--border);user-select:none}
+.kz-toggle-btn:hover{color:var(--text)}
+.kz-pip{width:24px;height:12px;border-radius:6px;background:var(--bg);border:.5px solid var(--border2);position:relative;flex-shrink:0;transition:background .2s,border-color .2s}
+.kz-pip.on{background:rgba(200,40,40,.7);border-color:rgba(200,40,40,.8)}
+.kz-pip-dot{position:absolute;top:2px;left:2px;width:8px;height:8px;background:#fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .2s}
+.kz-pip.on .kz-pip-dot{left:14px}
+.kz-row{position:relative;height:8px;background:var(--bg);border-radius:0 0 2px 2px;overflow:hidden;margin-top:2px}
+.kz-block{position:absolute;height:100%;background:rgba(200,40,40,.5)}
+.kz-needle{position:absolute;top:0;width:1px;height:100%;background:rgba(255,255,255,.4);z-index:10}
+.session-timeline.kz-active{border-radius:2px 2px 0 0;margin-bottom:0}
+.time-ruler-tick{display:flex;flex-direction:column;align-items:center;gap:2px}
+.time-ruler-utc{font-size:10px;color:var(--text3);letter-spacing:.05em}
+.time-ruler-local{font-size:10px;color:var(--text);letter-spacing:.05em;font-variant-numeric:tabular-nums}
+.current-time-needle{position:absolute;top:0;width:1px;height:100%;background:rgba(255,255,255,.7);z-index:10}
+.markets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:20px}
+.market-card{background:var(--bg2);padding:14px 16px;transition:background .15s;position:relative}
+.market-card:hover{background:var(--bg3)}
+.market-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px}
+.market-card.open::before{background:var(--green)}
+.market-card.closed::before{background:var(--border2)}
+.market-card.pre::before{background:var(--yellow)}
+.market-card.break::before,.market-card.holiday::before{background:var(--blue)}
+.market-card.closed .market-name,.market-card.closed .market-ticker,.market-card.closed .time-val,.market-card.closed .time-label,.market-card.closed .next-event{opacity:.62}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px}
+.market-name{font-size:13px;font-weight:500;color:var(--text);letter-spacing:.02em}
+.market-ticker{font-size:11px;color:var(--text2);letter-spacing:.1em;margin-top:2px}
+.status-badge{font-size:10px;font-weight:600;letter-spacing:.15em;padding:2px 7px;border-radius:2px;text-transform:uppercase;white-space:nowrap}
+.status-badge.open{background:var(--green-bg);color:var(--green);border:1px solid rgba(0,230,118,.2)}
+.status-badge.closed{background:rgba(255,255,255,.03);color:var(--text3);border:1px solid var(--border)}
+.status-badge.pre{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(255,215,64,.2)}
+.status-badge.break,.status-badge.holiday{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(77,184,255,.2)}
+.card-times{display:flex;gap:16px;margin-bottom:10px}
+.time-block{flex:1}
+.time-label{font-size:10px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:3px}
+.time-val{font-size:14px;font-weight:500;color:var(--text2);font-variant-numeric:tabular-nums}
+.time-val.highlight{color:var(--text)}
+.time-val small{font-size:10px;color:var(--text3);font-weight:400}
+.card-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.next-event{font-size:11px;color:var(--text2)}
+.next-event span{color:var(--text);font-variant-numeric:tabular-nums}
+.session-progress{height:2px;background:var(--border);border-radius:1px;margin-top:10px;overflow:hidden}
+.session-progress-fill{height:100%;border-radius:1px;background:var(--green-dim);transition:width 1s linear}
+.market-card.closed .session-progress-fill{background:var(--text3);width:0!important}
+.empty-state{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:28px 20px;text-align:center;color:var(--text2);font-size:12px;letter-spacing:.1em;margin-bottom:20px}
+.empty-state strong{display:block;color:var(--text);font-size:13px;letter-spacing:.15em;margin-bottom:6px}
+.forex-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:20px}
+.forex-cell{background:var(--bg2);padding:12px 14px}
+.fx-pair{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--text)}
+.countdown-strip{display:flex;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:20px}
+.countdown-item{flex:1;background:var(--bg2);padding:12px 16px;display:flex;align-items:center;gap:12px}
+.countdown-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.countdown-dot.open{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s ease infinite}
+.countdown-dot.closed{background:var(--text3)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.countdown-label{font-size:11px;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
+.countdown-val{font-size:15px;font-weight:500;color:var(--text);font-variant-numeric:tabular-nums;margin-top:1px}
+.countdown-val.urgent{color:var(--yellow)}
+.footer{padding:12px 24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text2);letter-spacing:.1em;gap:12px;flex-wrap:wrap}
+.live-dot{display:inline-block;width:5px;height:5px;background:var(--green);border-radius:50%;margin-right:5px;animation:pulse 2s ease infinite}
+.section-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.section-header .section-label{margin-bottom:0}
+.section-divider{flex:1;height:1px;background:var(--border)}
+body.light{--bg:#f4f6f9;--bg2:#fff;--bg3:#e8ecf2;--border:#d0d9e8;--border2:#b8c5d9;--text:#1a2333;--text2:#4a5d78;--text3:#5f7391;--green:#00a854;--green-dim:#007a3d;--green-bg:rgba(0,168,84,.08);--yellow:#a86a00;--yellow-bg:rgba(193,127,0,.08);--blue:#1a73e8;--blue-bg:rgba(26,115,232,.08)}
+body.light::before{display:none}
+.theme-toggle{display:flex;align-items:center;gap:8px;padding:4px}
+.toggle-icon{font-size:14px;line-height:1}
+.toggle-track{position:relative;width:36px;height:20px;background:var(--border2);border-radius:10px;transition:background .25s;flex-shrink:0}
+.toggle-track.on{background:var(--accent)}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle-track.on .toggle-thumb{transform:translateX(16px)}
+.glass-bg{display:none}
+@media(max-width:680px){
+  .glass-bg{display:block;position:absolute;top:0;left:0;right:0;height:100vh;z-index:0;overflow:hidden;pointer-events:none}
+  .glass-blob{position:absolute;border-radius:50%;filter:blur(70px);opacity:.14}
+  body.light .glass-blob{opacity:.32}
+  .glass-blob.pink{width:240px;height:240px;background:#e06faa;top:0;left:-70px}
+  .glass-blob.blue{width:280px;height:280px;background:#4d9fff;top:12%;right:-90px}
+  .glass-blob.amber{width:220px;height:220px;background:#ffd740;top:30%;left:-60px}
+  .glass-blob.pink2{width:220px;height:220px;background:#e06faa;top:50%;right:-70px}
+  .glass-blob.blue2{width:240px;height:240px;background:#4d9fff;top:68%;left:-60px}
+  .glass-blob.amber2{width:200px;height:200px;background:#ffd740;top:86%;right:-50px}
+  .header,.main{position:relative;z-index:1}
+  .header{padding:14px 16px;border-radius:0 0 24px 24px}
+  .session-bar-wrap{background:rgba(15,16,24,.55);backdrop-filter:blur(20px);border:.5px solid rgba(255,255,255,.14);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 8px 20px rgba(0,0,0,.3)}
+  body.light .session-bar-wrap{background:rgba(255,255,255,.55);border:.5px solid rgba(0,0,0,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 8px 20px rgba(0,0,0,.08)}
+  .market-card,.countdown-item,.empty-state{background:rgba(255,255,255,.07);backdrop-filter:blur(20px) saturate(1.3);border:.5px solid rgba(255,255,255,.18);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 8px 20px rgba(0,0,0,.3)}
+  .market-card::before{display:none}
+  .markets-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;background:none;border:0;border-radius:0;overflow:visible}
+  .market-card{padding:12px 14px}
+  .market-card .card-top{flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:6px}
+  .market-card .card-times,.market-card .session-progress{display:none}
+  .market-name{font-size:14px}
+  .market-ticker{font-size:10px}
+  .card-bottom .next-event{font-size:11px;margin-top:2px}
+  .countdown-strip{display:grid;grid-auto-flow:column;grid-template-rows:repeat(2,auto);grid-auto-columns:calc(33.3333% - 6.67px);overflow-x:auto;gap:10px;padding-bottom:4px;scrollbar-width:none;scroll-snap-type:x mandatory;background:none;border:0;border-radius:0;mask-image:linear-gradient(to right,#000 92%,transparent);-webkit-mask-image:linear-gradient(to right,#000 92%,transparent)}
+  .countdown-strip::-webkit-scrollbar{display:none}
+  .countdown-item{scroll-snap-align:start;padding:10px 12px;flex-direction:column;align-items:flex-start;gap:4px}
+  .countdown-label{font-size:10px;letter-spacing:.04em}
+  .countdown-val{font-size:12px}
+  .session-timeline{height:22px;border-radius:14px}
+  .session-block{font-size:0}
+  .time-ruler-tick:nth-child(2n){display:none}
+  .session-bar-header{flex-wrap:wrap;gap:8px}
+  .session-bar-key{flex-wrap:wrap;gap:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
 </style>
 </head>
 <body>
 
-<div class="glass-bg">
-  <div class="glass-blob pink"></div>
-  <div class="glass-blob blue"></div>
-  <div class="glass-blob amber"></div>
-  <div class="glass-blob pink2"></div>
-  <div class="glass-blob blue2"></div>
-  <div class="glass-blob amber2"></div>
-
+<div class="glass-bg" aria-hidden="true">
+  <div class="glass-blob pink"></div><div class="glass-blob blue"></div>
+  <div class="glass-blob amber"></div><div class="glass-blob pink2"></div>
+  <div class="glass-blob blue2"></div><div class="glass-blob amber2"></div>
 </div>
 
-<div class="header">
-  <div style="display:flex;align-items:center;gap:16px;">
-    <div class="logo">MKT<span>CLOCK</span></div>
-    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-      </svg>
-      <div class="toggle-track" id="toggle-track">
-        <div class="toggle-thumb"></div>
-      </div>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-      </svg>
-    </div>
+<header class="header">
+  <div style="display:flex;align-items:center;gap:16px">
+    <h1 class="logo" style="font-size:11px">MKT<span>CLOCK</span></h1>
+    <button class="theme-toggle" id="theme-toggle" role="switch" aria-checked="false" aria-label="Light mode">
+      <svg class="toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <span class="toggle-track" id="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+      <svg class="toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
   </div>
   <div class="header-clock">
     <div id="local-time">--:--:--</div>
-    <div id="local-date">--- --- --</div>
-    <div id="local-tz">UTC+0</div>
+    <div id="local-date">&nbsp;</div>
+    <div id="local-tz">&nbsp;</div>
   </div>
-</div>
+</header>
 
-<div class="main">
+<main class="main">
 
-  <!-- Session Bar -->
-  <div class="session-bar-wrap">
+  <section class="session-bar-wrap" aria-label="24 hour session overview">
     <div class="session-bar-header">
-      <div class="section-label">24H SESSION OVERVIEW — UTC / LOCAL</div>
+      <div class="section-label" id="sessions-label">24H SESSION OVERVIEW — UTC / LOCAL</div>
       <div class="session-bar-key">
-        <div class="key-item">
-          <div class="key-swatch hatch"></div>
-          PRE-MARKET
-        </div>
-        <div class="key-item kz-key-item" id="kz-key-item" style="display:none;">
-          <div class="key-swatch kz"></div>
-          KILL ZONE
-        </div>
-        <div class="kz-toggle-btn" onclick="toggleKillZones()">
-          <div class="kz-pip" id="kz-pip"><div class="kz-pip-dot"></div></div>
+        <div class="key-item"><span class="key-swatch hatch"></span>PRE-MARKET</div>
+        <div class="key-item" id="kz-key-item" hidden><span class="key-swatch kz"></span>KILL ZONE</div>
+        <button class="kz-toggle-btn" id="kz-toggle" role="switch" aria-checked="false" aria-controls="kz-row">
+          <span class="kz-pip" id="kz-pip" aria-hidden="true"><span class="kz-pip-dot"></span></span>
           KILL ZONES
-        </div>
+        </button>
       </div>
     </div>
-    <div class="session-timeline" id="session-timeline">
+    <div class="session-timeline" id="session-timeline" aria-hidden="true">
       <div class="current-time-needle" id="time-needle"></div>
     </div>
-    <div class="kz-row" id="kz-row"></div>
-    <div class="time-ruler" id="time-ruler"></div>
-  </div>
+    <div class="kz-row" id="kz-row" hidden></div>
+    <div class="time-ruler" id="time-ruler" aria-hidden="true"></div>
+  </section>
 
-  <!-- Key Countdowns -->
   <div class="section-header">
     <div class="section-label">NEXT OPEN / CLOSE</div>
     <div class="section-divider"></div>
   </div>
-  <div class="countdown-strip" id="countdown-strip"></div>
+  <div class="countdown-strip" id="countdown-strip" aria-live="off"></div>
 
-  <!-- Main Markets -->
   <div class="section-header">
     <div class="section-label">EQUITY MARKETS</div>
     <div class="section-divider"></div>
-    <div class="kz-toggle-btn" onclick="toggleHideClosed()">
-      <div class="kz-pip" id="hide-closed-pip"><div class="kz-pip-dot"></div></div>
+    <button class="kz-toggle-btn" id="hide-closed" role="switch" aria-checked="false" aria-controls="markets-grid">
+      <span class="kz-pip" id="hide-closed-pip" aria-hidden="true"><span class="kz-pip-dot"></span></span>
       HIDE CLOSED
-    </div>
+    </button>
   </div>
   <div class="markets-grid" id="markets-grid"></div>
+  <div class="empty-state" id="empty-state" hidden>
+    <strong>ALL EQUITY MARKETS CLOSED</strong>
+    <span id="empty-next">—</span>
+  </div>
 
+  <div class="section-header">
+    <div class="section-label">FX PAIRS</div>
+    <div class="section-divider"></div>
+  </div>
+  <div class="forex-row" id="forex-row"></div>
 
+</main>
 
-</div>
-
-<div class="footer">
-  <div><span class="live-dot"></span>LIVE — REFRESHES EVERY 30S</div>
-  <div id="last-update">LAST UPDATE: --:--:--</div>
+<footer class="footer">
+  <div><span class="live-dot"></span>LIVE — SYNCED TO DEVICE CLOCK</div>
+  <div id="last-update">LAST UPDATE: —</div>
   <div>TIMES IN YOUR LOCAL TIMEZONE</div>
-</div>
+</footer>
 
-<script>
-// ─── Market definitions ───────────────────────────────────────────────────────
-const MARKETS = [
-  {
-    id: 'nasdaq', name: 'NASDAQ', ticker: 'NDX / QQQ',
-    tz: 'America/New_York',
-    open: [9,30], close: [16,0],
-    pre: [4,0], afterhours: [20,0],
-    session: 'US',
-    index: '^NDX'
-  },
-  {
-    id: 'nyse', name: 'NYSE', ticker: 'S&P 500 / SPY',
-    tz: 'America/New_York',
-    open: [9,30], close: [16,0],
-    session: 'US',
-    index: '^GSPC'
-  },
-  {
-    id: 'cme', name: 'CME Futures', ticker: 'ES / NQ / RTY',
-    tz: 'America/Chicago',
-    open: [17,0], close: [16,0],       // spans midnight — 17:00 open, 16:00 close next day
-    maintenance: [16,0], maintenanceEnd: [17,0], // daily 1h break 16:00-17:00 CT
-    session: 'US'
-  },
-  {
-    id: 'lse', name: 'London Stock Exchange', ticker: 'FTSE 100',
-    tz: 'Europe/London',
-    open: [8,0], close: [16,30],
-    session: 'EU'
-  },
-  {
-    id: 'xetra', name: 'Frankfurt / XETRA', ticker: 'DAX',
-    tz: 'Europe/Berlin',
-    open: [9,0], close: [17,30],
-    session: 'EU'
-  },
-  {
-    id: 'tse', name: 'Tokyo Stock Exchange', ticker: 'Nikkei 225',
-    tz: 'Asia/Tokyo',
-    open: [9,0], close: [15,30],
-    lunch: [11,30], lunchEnd: [12,30],
-    session: 'ASIA'
-  },
-  {
-    id: 'hkex', name: 'Hong Kong Exchange', ticker: 'Hang Seng',
-    tz: 'Asia/Hong_Kong',
-    open: [9,30], close: [16,0],
-    lunch: [12,0], lunchEnd: [13,0],
-    session: 'ASIA'
-  },
-  {
-    id: 'sse', name: 'Shanghai / Shenzhen', ticker: 'CSI 300',
-    tz: 'Asia/Shanghai',
-    open: [9,30], close: [15,0],
-    lunch: [11,30], lunchEnd: [13,0],
-    session: 'ASIA'
-  },
-  {
-    id: 'asx', name: 'ASX', ticker: 'ASX 200',
-    tz: 'Australia/Sydney',
-    open: [10,0], close: [16,0],
-    session: 'ASIA'
-  },
-  {
-    id: 'eurex', name: 'Eurex Futures', ticker: 'FDAX / FESX / BUND',
-    tz: 'Europe/Berlin',
-    open: [8,0], close: [22,0],
-    session: 'EU'
-  },
-  {
-    id: 'sgx', name: 'Singapore Exchange', ticker: 'SGX / STI',
-    tz: 'Asia/Singapore',
-    open: [9,0], close: [17,0],
-    lunch: [12,0], lunchEnd: [13,0],
-    session: 'ASIA'
-  },
-  {
-    id: 'crypto', name: 'Crypto (BTC/ETH)', ticker: 'BTC · ETH · SOL',
-    tz: 'UTC',
-    open: [0,0], close: [23,59],
-    alwaysOn: true,
-    session: 'CRYPTO'
-  }
-];
+<div class="sr" aria-live="polite" id="announcer"></div>
 
-// UTC hours — TSE proxy for Asia, LSE for London, NYSE for US
-const SESSIONS = [
-  { label: 'ASIA',    start: 0,    end: 6,    cls: 'asia'                 },
-  { label: 'LONDON',  start: 8,    end: 16.5, cls: 'europe'               },
-  { label: 'US PRE',  start: 9,    end: 14.5, cls: 'us',    pre: true     },
-  { label: 'US',      start: 14.5, end: 21,   cls: 'us'                   },
-  { label: 'LDN/US',  start: 14.5, end: 16.5, cls: 'overlap'              },
-];
-
-const FX_PAIRS = [
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD',
-  'USD/CHF', 'USD/CAD', 'NZD/USD', 'DXY'
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function getLocalTimeInTZ(tz) {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour: '2-digit', minute: '2-digit',
-    second: '2-digit', hour12: false,
-    weekday: 'short'
-  }).formatToParts(now);
-  const get = t => parts.find(p => p.type === t)?.value;
-  return {
-    h: parseInt(get('hour')),
-    m: parseInt(get('minute')),
-    s: parseInt(get('second')),
-    day: get('weekday') // Mon–Sun
-  };
-}
-
-function isWeekend(tz) {
-  const { day } = getLocalTimeInTZ(tz);
-  return day === 'Sat' || day === 'Sun';
-}
-
-function getMarketStatus(m) {
-  // Crypto — always open
-  if (m.alwaysOn) return 'open';
-
-  // CME — special case: spans midnight, 1h maintenance, closed Fri 16:00 - Sun 17:00 CT
-  if (m.id === 'cme') {
-    const t = getLocalTimeInTZ('America/Chicago');
-    const mins = t.h * 60 + t.m;
-    const maintStart = m.maintenance[0] * 60 + m.maintenance[1];   // 16:00 = 960
-    const maintEnd   = m.maintenanceEnd[0] * 60 + m.maintenanceEnd[1]; // 17:00 = 1020
-
-    // Fully closed windows
-    if (t.day === 'Sat') return 'closed';
-    if (t.day === 'Fri' && mins >= maintStart) return 'closed'; // Fri 16:00+ = closed for weekend
-    if (t.day === 'Sun' && mins < maintEnd) return 'closed';    // Sun before 17:00 = closed
-
-    // Daily maintenance break 16:00-17:00 (except Friday which is already caught above)
-    if (mins >= maintStart && mins < maintEnd) return 'lunch';
-
-    // Otherwise open (session spans midnight so no simple open/close comparison needed)
-    return 'open';
-  }
-
-  if (isWeekend(m.tz)) return 'closed';
-
-  const t = getLocalTimeInTZ(m.tz);
-  const mins = t.h * 60 + t.m;
-  const openMins  = m.open[0]  * 60 + m.open[1];
-  const closeMins = m.close[0] * 60 + m.close[1];
-
-  if (m.lunch) {
-    const lunchMins    = m.lunch[0]    * 60 + m.lunch[1];
-    const lunchEndMins = m.lunchEnd[0] * 60 + m.lunchEnd[1];
-    if (mins >= lunchMins && mins < lunchEndMins) return 'lunch';
-  }
-
-  if (m.pre) {
-    const preMins = m.pre[0] * 60 + m.pre[1];
-    if (mins >= preMins && mins < openMins) return 'pre';
-  }
-
-  if (mins >= openMins && mins < closeMins) return 'open';
-  return 'closed';
-}
-
-function fmtTime(h, m) {
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-}
-
-function toLocalTime(tz, h, m) {
-  // Convert market open/close times to user local time
-  const now = new Date();
-  // Build a date string for today in that tz at the given h:m
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(now);
-  const y = parts.find(p=>p.type==='year').value;
-  const mo = parts.find(p=>p.type==='month').value;
-  const d = parts.find(p=>p.type==='day').value;
-  const dt = new Date(`${y}-${mo}-${d}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
-  // dt is now in local time assumed — we need to create in TZ
-  // Use a different approach: find offset
-  const tzStr = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, timeZoneName: 'shortOffset'
-  }).format(now);
-  const offsetMatch = tzStr.match(/GMT([+-]\d+(?::\d+)?)/);
-  let offsetHours = 0;
-  if (offsetMatch) {
-    const offParts = offsetMatch[1].split(':');
-    offsetHours = parseInt(offParts[0]) + (offParts[1] ? parseInt(offParts[1]) / 60 * Math.sign(parseInt(offParts[0])) : 0);
-  }
-  // local offset
-  const localOffset = -now.getTimezoneOffset() / 60;
-  const diffH = localOffset - offsetHours;
-  let lh = h + diffH;
-  if (lh >= 24) lh -= 24;
-  if (lh < 0) lh += 24;
-  return fmtTime(Math.floor(lh), m + (diffH % 1 !== 0 ? 30 : 0));
-}
-
-// Accurate conversion using Intl
-function mktTimeToLocal(tz, h, m) {
-  const now = new Date();
-  // Get today's date in the market TZ
-  const dateParts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(now);
-  const yr = dateParts.find(p=>p.type==='year').value;
-  const mo = dateParts.find(p=>p.type==='month').value;
-  const dy = dateParts.find(p=>p.type==='day').value;
-
-  // Create UTC Date as if this h:m is in the market TZ
-  const mktDate = new Date(`${yr}-${mo}-${dy}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
-
-  // Find UTC offset of market TZ at this date
-  const tzOffset = (() => {
-    const utcDate = new Date(mktDate.toLocaleString('en-US', { timeZone: 'UTC' }));
-    const tzDate  = new Date(mktDate.toLocaleString('en-US', { timeZone: tz }));
-    return (tzDate - utcDate) / 36e5; // hours
-  })();
-
-  const utcH = h - tzOffset;
-  const utcDate = new Date(Date.UTC(parseInt(yr), parseInt(mo)-1, parseInt(dy), utcH, m));
-
-  // Format in user's local timezone
-  const localParts = new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit', minute: '2-digit', hour12: false
-  }).formatToParts(utcDate);
-  const lh = localParts.find(p=>p.type==='hour').value;
-  const lm = localParts.find(p=>p.type==='minute').value;
-  return `${lh}:${lm}`;
-}
-
-function timeUntil(tz, h, m) {
-  const now = new Date();
-  const dateParts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(now);
-  const yr = dateParts.find(p=>p.type==='year').value;
-  const mo = dateParts.find(p=>p.type==='month').value;
-  const dy = dateParts.find(p=>p.type==='day').value;
-
-  const tzOffset = (() => {
-    const utcDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'UTC' }));
-    const tzDate  = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
-    return (tzDate - utcDate) / 36e5;
-  })();
-
-  const utcH = h - tzOffset;
-  let target = new Date(Date.UTC(parseInt(yr), parseInt(mo)-1, parseInt(dy), utcH, m));
-  if (target < now) target = new Date(target.getTime() + 86400000);
-  const diff = target - now;
-  const hh = Math.floor(diff / 3600000);
-  const mm = Math.floor((diff % 3600000) / 60000);
-  const ss = Math.floor((diff % 60000) / 1000);
-  return { h: hh, m: mm, s: ss, ms: diff };
-}
-
-function sessionProgress(tz, openH, openM, closeH, closeM) {
-  const t = getLocalTimeInTZ(tz);
-  const cur = t.h * 60 + t.m;
-  const o   = openH * 60 + openM;
-  const c   = closeH * 60 + closeM;
-  if (cur < o || cur > c) return 0;
-  return Math.min(100, ((cur - o) / (c - o)) * 100);
-}
-
-// ─── Render ───────────────────────────────────────────────────────────────────
-
-function renderTimeRuler() {
-  const ruler = document.getElementById('time-ruler');
-  const UTC_HOURS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
-  ruler.innerHTML = UTC_HOURS.map(utcH => {
-    const utcLabel = `${String(utcH % 24).padStart(2,'0')}:00`;
-    // Convert UTC hour to local time
-    const d = new Date();
-    const localDate = new Date(Date.UTC(
-      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
-      utcH % 24, 0, 0
-    ));
-    const localLabel = new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit', minute: '2-digit', hour12: false
-    }).format(localDate);
-    return `<div class="time-ruler-tick">
-      <span class="time-ruler-utc">${utcLabel}</span>
-      <span class="time-ruler-local">${localLabel}</span>
-    </div>`;
-  }).join('');
-}
-
-// Convert a market-local [h, m] to fractional UTC hours, DST-aware
-function mktLocalToUTCHour(tz, h, m) {
-  const now = new Date();
-  // Get today's date string in the target timezone
-  const dateParts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(now);
-  const yr  = dateParts.find(p => p.type === 'year').value;
-  const mo  = dateParts.find(p => p.type === 'month').value;
-  const dy  = dateParts.find(p => p.type === 'day').value;
-  // Build a Date as if it's that h:m in the target tz by using UTC and offset
-  const probe = new Date(`${yr}-${mo}-${dy}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`);
-  // Get the UTC offset for that tz right now
-  const tzOffset = (() => {
-    const utcD = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
-    const tzD  = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-    return (tzD - utcD) / 36e5;
-  })();
-  return h - tzOffset + m / 60;
-}
-
-function renderSessionBar() {
-  renderTimeRuler();
-  const timeline = document.getElementById('session-timeline');
-  // Clear old blocks but keep needle
-  [...timeline.querySelectorAll('.session-block')].forEach(el => el.remove());
-
-  const now = new Date();
-  const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
-  const needle = document.getElementById('time-needle');
-  needle.style.left = `${(utcH / 24) * 100}%`;
-
-  // Derive US pre-market start dynamically so it follows DST
-  const nyse = MARKETS.find(m => m.id === 'nasdaq');
-  const usPreStartUTC  = nyse ? mktLocalToUTCHour('America/New_York', nyse.pre[0], nyse.pre[1]) : 9;
-  const usOpenUTC      = nyse ? mktLocalToUTCHour('America/New_York', nyse.open[0], nyse.open[1]) : 14.5;
-  const usCloseUTC     = nyse ? mktLocalToUTCHour('America/New_York', nyse.close[0], nyse.close[1]) : 21;
-
-  // Derive London times dynamically too — BST vs GMT shifts the open by 1h
-  const ldnOpenUTC  = mktLocalToUTCHour('Europe/London', 8, 0);
-  const ldnCloseUTC = mktLocalToUTCHour('Europe/London', 16, 30);
-
-  const dynamicSessions = [
-    { label: 'ASIA',    start: 0,             end: 6,            cls: 'asia'           },
-    { label: 'LONDON',  start: ldnOpenUTC,    end: ldnCloseUTC,  cls: 'europe'         },
-    { label: 'US PRE',  start: usPreStartUTC, end: usOpenUTC,    cls: 'us', pre: true  },
-    { label: 'US',      start: usOpenUTC,     end: usCloseUTC,   cls: 'us'             },
-    { label: 'LDN/US',  start: usOpenUTC,     end: ldnCloseUTC,  cls: 'overlap'        },
-  ];
-
-  dynamicSessions.forEach(s => {
-    const div = document.createElement('div');
-    div.className = `session-block ${s.cls}`;
-    div.style.left  = `${(s.start / 24) * 100}%`;
-    div.style.width = `${((s.end - s.start) / 24) * 100}%`;
-
-    const active = utcH >= s.start && utcH < s.end;
-    div.classList.add(active ? 'active' : 'inactive');
-    if (s.end - s.start > 2 && !s.pre) div.textContent = s.label;
-    if (s.pre) div.classList.add('pre-market');
-    timeline.insertBefore(div, needle);
-  });
-}
-
-let hideClosedMarkets = localStorage.getItem('hideClosedMarkets') === '1';
-
-function renderMarkets() {
-  const grid = document.getElementById('markets-grid');
-  grid.innerHTML = '';
-
-  MARKETS.forEach(m => {
-    const status = getMarketStatus(m);
-    if (hideClosedMarkets && status === 'closed') return;
-    const openLocal  = mktTimeToLocal(m.tz, m.open[0],  m.open[1]);
-    const closeLocal = mktTimeToLocal(m.tz, m.close[0], m.close[1]);
-
-    const progress = (status === 'open') 
-      ? sessionProgress(m.tz, m.open[0], m.open[1], m.close[0], m.close[1]) 
-      : 0;
-
-    let nextLabel = '', nextTime = '';
-    if (status === 'open' || status === 'lunch' || status === 'pre') {
-      const until = timeUntil(m.tz, m.close[0], m.close[1]);
-      nextLabel = status === 'pre' ? 'OPENS IN' : 'CLOSES IN';
-      if (status === 'pre') {
-        const u2 = timeUntil(m.tz, m.open[0], m.open[1]);
-        nextTime = `${u2.h}h ${String(u2.m).padStart(2,'0')}m`;
-      } else {
-        nextTime = until.h > 0 ? `${until.h}h ${String(until.m).padStart(2,'0')}m` : `${String(until.m).padStart(2,'0')}m ${String(until.s).padStart(2,'0')}s`;
-      }
-    } else {
-      const until = timeUntil(m.tz, m.open[0], m.open[1]);
-      nextLabel = 'OPENS IN';
-      nextTime = until.h > 0 ? `${until.h}h ${String(until.m).padStart(2,'0')}m` : `${String(until.m).padStart(2,'0')}m ${String(until.s).padStart(2,'0')}s`;
-    }
-
-    const statusLabel = { open: 'OPEN', closed: 'CLOSED', pre: 'PRE-MKT', lunch: 'LUNCH' }[status];
-
-    const card = document.createElement('div');
-
-    // Crypto gets a completely different card — always open, no times, no progress
-    if (m.alwaysOn) {
-      card.className = 'market-card open';
-      card.innerHTML = `
-        <div class="card-top">
-          <div>
-            <div class="market-name">${m.name}</div>
-            <div class="market-ticker">${m.ticker}</div>
-          </div>
-          <div class="status-badge open">OPEN 24/7</div>
-        </div>
-        <div class="card-times">
-          <div class="time-block">
-            <div class="time-label">HOURS</div>
-            <div class="time-val highlight">24 / 7 / 365</div>
-          </div>
-          <div class="time-block">
-            <div class="time-label">CLOSES</div>
-            <div class="time-val">NEVER</div>
-          </div>
-        </div>
-        <div class="card-bottom">
-          <div class="next-event">ALWAYS ACTIVE</div>
-        </div>
-        <div class="session-progress">
-          <div class="session-progress-fill" style="width:100%"></div>
-        </div>
-      `;
-    } else {
-      card.className = `market-card ${status}`;
-      card.innerHTML = `
-        <div class="card-top">
-          <div>
-            <div class="market-name">${m.name}</div>
-            <div class="market-ticker">${m.ticker}</div>
-          </div>
-          <div class="status-badge ${status}">${statusLabel}</div>
-        </div>
-        <div class="card-times">
-          <div class="time-block">
-            <div class="time-label">OPEN (LOCAL)</div>
-            <div class="time-val ${status === 'open' ? 'highlight' : ''}">${openLocal}</div>
-          </div>
-          <div class="time-block">
-            <div class="time-label">CLOSE (LOCAL)</div>
-            <div class="time-val">${closeLocal}</div>
-          </div>
-        </div>
-        <div class="card-bottom">
-          <div class="next-event">${nextLabel} <span>${nextTime}</span></div>
-        </div>
-        <div class="session-progress">
-          <div class="session-progress-fill" style="width:${progress.toFixed(1)}%"></div>
-        </div>
-      `;
-    }
-    grid.appendChild(card);
-  });
-}
-
-function renderForex() {
-  const row = document.getElementById('forex-row');
-  if (!row) return;
-  row.innerHTML = '';
-  FX_PAIRS.forEach(pair => {
-    const cell = document.createElement('div');
-    cell.className = 'forex-cell';
-    cell.innerHTML = `<div class="fx-pair">${pair}</div>`;
-    row.appendChild(cell);
-  });
-}
-
-function renderCountdowns() {
-  const strip = document.getElementById('countdown-strip');
-  strip.innerHTML = '';
-
-  const key = [
-    { label: 'NYSE / NASDAQ', id: 'nasdaq' },
-    { label: 'LONDON LSE',    id: 'lse'    },
-    { label: 'FRANKFURT DAX', id: 'xetra'  },
-    { label: 'NIKKEI 225',    id: 'tse'    },
-    { label: 'HANG SENG',     id: 'hkex'   },
-  ];
-
-  const items = key.map(k => {
-    const m = MARKETS.find(x => x.id === k.id);
-    const status = getMarketStatus(m);
-    const isOpen = status === 'open';
-    const until = isOpen
-      ? timeUntil(m.tz, m.close[0], m.close[1])
-      : timeUntil(m.tz, m.open[0],  m.open[1]);
-    return { k, isOpen, until };
-  });
-
-  items.sort((a, b) => {
-    const diff = a.until.ms - b.until.ms;
-    // Treat near-identical times (within 60s) as a tie to avoid order
-    // flickering each render due to JS timing jitter between calls.
-    if (Math.abs(diff) < 60000) {
-      return a.k.label.localeCompare(b.k.label);
-    }
-    return diff;
-  });
-
-  items.forEach(({ k, isOpen, until }) => {
-    const label  = isOpen ? `CLOSES IN` : `OPENS IN`;
-    const urgent = !isOpen && until.ms < 1800000; // under 30 min
-
-    const item = document.createElement('div');
-    item.className = 'countdown-item';
-    item.innerHTML = `
-      <div class="countdown-dot ${isOpen ? 'open' : 'closed'}"></div>
-      <div>
-        <div class="countdown-label">${k.label} · ${label}</div>
-        <div class="countdown-val ${urgent ? 'urgent' : ''}">
-          ${until.h > 0 ? until.h + 'h ' : ''}${String(until.m).padStart(2,'0')}m ${String(until.s).padStart(2,'0')}s
-        </div>
-      </div>
-    `;
-    strip.appendChild(item);
-  });
-}
-
-function updateClock() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2,'0');
-  const m = String(now.getMinutes()).padStart(2,'0');
-  const s = String(now.getSeconds()).padStart(2,'0');
-  document.getElementById('local-time').textContent = `${h}:${m}:${s}`;
-
-  const days   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  document.getElementById('local-date').textContent =
-    `${days[now.getDay()]} ${String(now.getDate()).padStart(2,'0')} ${months[now.getMonth()]} ${now.getFullYear()}`;
-
-  const tzStr = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const offset = -now.getTimezoneOffset();
-  const sign = offset >= 0 ? '+' : '-';
-  const oh = String(Math.floor(Math.abs(offset)/60)).padStart(2,'0');
-  const om = String(Math.abs(offset)%60).padStart(2,'0');
-  document.getElementById('local-tz').textContent = `${tzStr} · UTC${sign}${oh}:${om}`;
-}
-
-function fullUpdate() {
-  updateClock();
-  renderSessionBar();
-  renderCountdowns();
-  renderMarkets();
-
-  const now = new Date();
-  document.getElementById('last-update').textContent =
-    `LAST UPDATE: ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-}
-
-// Initial render
-renderForex();
-fullUpdate();
-
-function syncGlassBgHeight() {
-  const bg = document.querySelector('.glass-bg');
-  if (bg) bg.style.height = document.body.scrollHeight + 'px';
-}
-syncGlassBgHeight();
-window.addEventListener('resize', syncGlassBgHeight);
-window.addEventListener('load', syncGlassBgHeight);
-
-// Clock every second, full refresh every 30s
-setInterval(updateClock, 1000);
-setInterval(renderCountdowns, 1000); // countdown ticks every second
-setInterval(() => {
-  renderSessionBar();
-  renderMarkets();
-  syncGlassBgHeight();
-}, 15000);
-
-// Full data refresh every 30s
-setInterval(fullUpdate, 30000);
-
-// Kill zones defined in ET, converted to UTC dynamically (DST-aware)
-function getKillZones() {
-  const toUTC = (h, m) => {
-    const utc = mktLocalToUTCHour('America/New_York', h, m);
-    return ((utc % 24) + 24) % 24;
-  };
-  // Asian KZ: 20:00-00:00 ET spans UTC midnight so we split into two fixed segments
-  // In EST: 01:00-05:00 UTC | In EDT: 00:00-04:00 UTC
-  // Rather than wrapping, just use the ET offset to get the start and run 4h
-  const asianKZStart = toUTC(20, 0);
-  const asianKZEnd   = asianKZStart + 4; // always 4h window, may exceed 24
-
-  const zones = [
-    { start: toUTC(2, 0),  end: toUTC(5, 0)  }, // London KZ
-    { start: toUTC(7, 0),  end: toUTC(10, 0) }, // NY KZ
-    { start: toUTC(10, 0), end: toUTC(12, 0) }, // London Close
-  ];
-
-  // Asian KZ — split at 24 if it wraps midnight
-  if (asianKZEnd <= 24) {
-    zones.push({ start: asianKZStart, end: asianKZEnd });
-  } else {
-    zones.push({ start: asianKZStart, end: 24 });
-    zones.push({ start: 0, end: asianKZEnd - 24 });
-  }
-
-  return zones.filter(kz => kz.end > kz.start);
-}
-
-function renderKillZones() {
-  const row = document.getElementById('kz-row');
-  const now = new Date();
-  const utcH = now.getUTCHours() + now.getUTCMinutes() / 60;
-  row.innerHTML = '';
-
-  getKillZones().forEach(kz => {
-    const div = document.createElement('div');
-    div.className = 'kz-block';
-    div.style.left  = `${(kz.start / 24) * 100}%`;
-    div.style.width = `${((kz.end - kz.start) / 24) * 100}%`;
-    row.appendChild(div);
-  });
-
-  // needle
-  const needle = document.createElement('div');
-  needle.className = 'kz-needle';
-  needle.style.left = `${(utcH / 24) * 100}%`;
-  row.appendChild(needle);
-}
-
-function toggleKillZones() {
-  const row     = document.getElementById('kz-row');
-  const pip     = document.getElementById('kz-pip');
-  const keyItem = document.getElementById('kz-key-item');
-  const timeline = document.getElementById('session-timeline');
-  const on = row.classList.toggle('visible');
-  pip.classList.toggle('on', on);
-  keyItem.style.display = on ? 'flex' : 'none';
-  timeline.classList.toggle('kz-active', on);
-  if (on) renderKillZones();
-  localStorage.setItem('kzVisible', on ? '1' : '0');
-  syncGlassBgHeight();
-}
-
-// Restore KZ state on load
-if (localStorage.getItem('kzVisible') === '1') {
-  toggleKillZones();
-}
-
-function toggleHideClosed() {
-  hideClosedMarkets = !hideClosedMarkets;
-  document.getElementById('hide-closed-pip').classList.toggle('on', hideClosedMarkets);
-  localStorage.setItem('hideClosedMarkets', hideClosedMarkets ? '1' : '0');
-  renderMarkets();
-  syncGlassBgHeight();
-}
-
-if (hideClosedMarkets) {
-  document.getElementById('hide-closed-pip').classList.add('on');
-}
-
-function toggleTheme() {
-  const isLight = document.body.classList.toggle("light");
-  document.getElementById("toggle-track").classList.toggle("on", isLight);
-  localStorage.setItem("theme", isLight ? "light" : "dark");
-}
-
-if (localStorage.getItem("theme") === "light") {
-  document.body.classList.add("light");
-  document.getElementById("toggle-track").classList.add("on");
-}
-</script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>
